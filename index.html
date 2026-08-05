@@ -85,9 +85,9 @@ button.tap{text-align:left;background:transparent;border:none;padding:0;font:inh
 .cal-dow{display:grid;grid-template-columns:repeat(7,1fr);margin-bottom:4px;}
 .cal-dow span{text-align:center;font-size:11.5px;font-weight:600;color:var(--label3);padding:4px 0;}
 .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;}
-.cal-c{height:42px;}
-.cal-d{border-radius:50%;font-size:14.5px;font-weight:500;color:var(--label);
-  display:flex;align-items:center;justify-content:center;}
+.cal-c{height:44px;}
+.cal-d{width:40px;height:40px;margin:2px auto;border-radius:50%;font-size:14.5px;font-weight:500;
+  color:var(--label);display:flex;align-items:center;justify-content:center;}
 .cal-d.sun{color:#E5484D;} .cal-d.sat{color:#3E63DD;}
 .cal-d.today{font-weight:800;text-decoration:underline;text-underline-offset:3px;}
 .cal-d.on{background:var(--label);color:#fff;font-weight:700;}
@@ -292,7 +292,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;
 
 <script>
 'use strict';
-const VERSION='v0.13', BUILD_TIME='2026-08-06 10:00';
+const VERSION='v0.14', BUILD_TIME='2026-08-06 10:40';
 const KEY='tripprep_v1';
 
 /* ================= 유틸 ================= */
@@ -790,8 +790,8 @@ function viewToday(t){
     <div class="tl-item ${i===nowIdx?'now':(nowIdx>=0&&i<nowIdx?'past':'')}" data-plan="${p.id}">
       <div class="tl-dot"></div>
       <button class="grow tap" data-editplan="${p.id}"><div class="tl-time">${esc((p.time||'시간 미정')+(p.end?' – '+p.end:''))}${i===nowIdx?' · 지금':''}</div>
-        <div class="tl-title">${esc(p.title)}</div>
-        ${p.note?`<div class="tiny">${esc(p.note)}</div>`:''}</button>
+        <div class="tl-title">${esc(p.title||p.note||'(제목 없음)')}</div>
+        ${p.title&&p.note?`<div class="tiny">${esc(p.note)}</div>`:''}</button>
       <button class="del-x" data-delplan="${p.id}">${XICO}</button>
     </div>`).join('')}</div>`
     :`<div class="empty">이 날의 일정이 없습니다.</div>`;
@@ -1577,7 +1577,7 @@ function sheetPlan(id){
         <button class="inp fld-btn" id="p-when"><span id="p-when-t">${whenLabel()}</span>${CALICO}</button></div>
       <div class="fld"><div class="fld-lab">종료 시간 (선택)</div>
         <button class="inp fld-btn" id="p-end"><span id="p-end-t" class="${end?'':'ph'}">${end||'없음'}</span>${CLOCKICO}</button></div>
-      <div class="fld"><div class="fld-lab">일정</div>
+      <div class="fld"><div class="fld-lab">일정 (선택)</div>
         <input class="inp" id="p-title" placeholder="예: 마트 장보기" value="${esc(p?p.title:'')}"></div>
       <div class="fld">
         <div class="fld-lab">장소 · 메모 (선택)</div>
@@ -1601,9 +1601,9 @@ function sheetPlan(id){
   if(plBtn)plBtn.onclick=()=>openPlaceSearch(r=>{$('#p-note').value=r.name;});
   $('#p-save').onclick=()=>{
     const title=$('#p-title').value.trim();
-    if(!title){toast('일정을 입력해 주세요');return;}
-    if(end&&time&&end<time){toast('종료 시간이 시작보다 빠릅니다');return;}
     const note=$('#p-note').value.trim();
+    if(!title&&!note){toast('일정이나 장소 중 하나는 입력해 주세요');return;}
+    if(end&&time&&end<time){toast('종료 시간이 시작보다 빠릅니다');return;}
     if(p){Object.assign(p,{day,time,end,title,note});}
     else{t.plans.push({id:uid(),day,time,end,title,note});}
     UI.day=day; save();closeSheet();render();toast(p?'저장했습니다':'추가했습니다');
