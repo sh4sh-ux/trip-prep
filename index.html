@@ -292,7 +292,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;
 
 <script>
 'use strict';
-const VERSION='v0.12', BUILD_TIME='2026-08-06 09:30';
+const VERSION='v0.13', BUILD_TIME='2026-08-06 10:00';
 const KEY='tripprep_v1';
 
 /* ================= 유틸 ================= */
@@ -1455,52 +1455,81 @@ function sheetAddExtra(){
   };
 }
 
-/* 장보기 항목 편집 — 탭하면 올라오는 시트 */
+// 이 장보기 항목이 실제로 어디에 들어있나 (메뉴 재료 / 직접 항목)
+function buyHomes(t,key){
+  const menus=(t.menus||[]).filter(m=>(m.ing||[]).some(i=>i.n+'|'+(i.u||'')===key));
+  const extra=(t.extras||[]).find(x=>x.n+'|'+(x.u||'')===key);
+  return {menus,extra};
+}
+
+/* 장보기 항목 편집 — 탭하면 올라오는 시트 (이름·수량·분류·연결 메뉴 수정) */
 function sheetEditBuy(key){
   const t=curTrip();
   const item=mergeMarket(t).find(i=>i.key===key);
   if(!item){closeSheet();return;}
-  const src=item.manual&&!item.from.length?'직접 추가한 항목':`${item.from.join(' · ')} 에서 옴`;
+  const homes=buyHomes(t,key);
+  const single=(homes.menus.length+(homes.extra?1:0))===1;   // 한 곳에만 있으면 전체 수정 가능
+  const curMenuId=homes.menus.length===1?homes.menus[0].id:'';
+  const inExtra=!!homes.extra&&homes.menus.length===0;
   const q=Number.isInteger(item.q)?item.q:Number(item.q.toFixed(2));
   openSheet(`
-    <div class="sh-hd"><div class="sh-title">${esc(item.n)}</div>
+    <div class="sh-hd"><div class="sh-title">항목 편집</div>
       <button class="icon-btn" onclick="closeSheet()">${XICO}</button></div>
     <div class="sh-body">
-      <div class="hint" style="margin-top:0">${esc(src)}</div>
+      <div class="fld"><div class="fld-lab">품목</div>
+        <input class="inp" id="b-name" value="${esc(item.n)}" ${single?'':'disabled'}></div>
       <div class="fld"><div class="fld-lab">수량</div>
         <input class="inp" id="b-qty" value="${esc(q+item.u)}"></div>
       <div class="fld"><div class="fld-lab">분류</div>
         <div class="chips" id="b-cat">${MKT_CATS.map(c=>
           `<button class="chip ${c===item.c?'on':''}" data-c="${esc(c)}">${MKT_IC[c]} ${c}</button>`).join('')}</div></div>
-      ${item.manual&&!item.from.length?`
-      <div class="fld"><div class="fld-lab">메뉴 재료로 옮기기</div>
-        <div class="chips" id="b-menu">${(t.menus||[]).map(m=>
-          `<button class="chip" data-m="${m.id}">${esc(m.emoji||'🍽')} ${esc(m.name)}</button>`).join('')
-          ||'<div class="tiny">메뉴가 없습니다</div>'}</div></div>
-      <div class="hint">메뉴에 넣으면 그 메뉴를 뺄 때 같이 빠지고, 내 사전에 저장돼 다음 여행에서도 따라옵니다.</div>
-      `:''}
+      ${single?`
+      <div class="fld"><div class="fld-lab">연결된 메뉴</div>
+        <div class="chips" id="b-menu">
+          <button class="chip ${inExtra?'on':''}" data-m="">직접 항목</button>
+          ${(t.menus||[]).map(m=>
+            `<button class="chip ${m.id===curMenuId?'on':''}" data-m="${m.id}">${esc(m.emoji||'🍽')} ${esc(m.name)}</button>`).join('')}
+        </div></div>
+      <div class="hint">메뉴에 연결하면 그 메뉴를 뺄 때 같이 빠지고 내 사전에 저장됩니다.
+        ‘직접 항목’은 메뉴와 무관한 장보기 항목입니다.</div>
+      `:`<div class="hint">여러 메뉴에서 합쳐진 항목입니다 (${esc(item.from.join(' · '))}).
+        이름·연결 메뉴를 바꾸려면 각 메뉴 편집에서 재료를 수정해 주세요.</div>`}
       <button class="btn" id="b-save">저장</button>
       <button class="btn ghost" id="b-del">이 항목 삭제</button>
     </div>`);
-  const menuBox=$('#b-menu');
-  if(menuBox)menuBox.onclick=ev=>{
-    const b=ev.target.closest('[data-m]'); if(!b)return;
-    const raw=$('#b-qty').value.trim(); const mm=raw.match(/^([\d.]+)\s*(.*)$/);
-    t.overrides=t.overrides||{};
-    t.overrides[key]={q:mm?parseFloat(mm[1]):1,u:mm?(mm[2]||'개'):raw,c:sel};  // 편집 중이던 값 반영
-    const moved=moveExtraToMenu(key,b.dataset.m);
-    save();closeSheet();render();
-    toast(moved?`'${item.n}' → ${moved.name} 재료로 옮겼습니다`:'옮기지 못했습니다');
-  };
-  let sel=item.c;
+  let sel=item.c, target=inExtra?'':curMenuId;
   $('#b-cat').onclick=ev=>{const b=ev.target.closest('[data-c]');if(!b)return;
     sel=b.dataset.c;$('#b-cat').querySelectorAll('.chip').forEach(c=>c.classList.toggle('on',c===b));};
+  const mb=$('#b-menu');
+  if(mb)mb.onclick=ev=>{const b=ev.target.closest('[data-m]');if(!b)return;
+    target=b.dataset.m;mb.querySelectorAll('.chip').forEach(c=>c.classList.toggle('on',c===b));};
   $('#b-save').onclick=()=>{
     const raw=$('#b-qty').value.trim()||'1개';
-    const m=raw.match(/^([\d.]+)\s*(.*)$/);
-    t.overrides=t.overrides||{};
-    t.overrides[key]={q:m?parseFloat(m[1]):1,u:m?(m[2]||'개'):raw,c:sel};
-    save();closeSheet();render();toast('저장했습니다');
+    const mm=raw.match(/^([\d.]+)\s*(.*)$/);
+    const nq=mm?parseFloat(mm[1]):1, nu=mm?(mm[2]||'개'):raw;
+    if(!single){   // 합쳐진 항목: 수량·분류만 덮어씀
+      t.overrides=t.overrides||{};
+      t.overrides[key]={q:isNaN(nq)?1:nq,u:nu,c:sel};
+      save();closeSheet();render();toast('저장했습니다');return;
+    }
+    const nn=$('#b-name').value.trim();
+    if(!nn){toast('품목을 입력해 주세요');return;}
+    // 현재 위치에서 제거
+    if(inExtra)t.extras=t.extras.filter(x=>x.n+'|'+(x.u||'')!==key);
+    else if(curMenuId){const cm=t.menus.find(m=>m.id===curMenuId);
+      cm.ing=(cm.ing||[]).filter(i=>i.n+'|'+(i.u||'')!==key);
+      saveToLibrary(cm.name,cm.emoji,cm.ing,t.people||1,cm.gear);}
+    if(t.overrides)delete t.overrides[key];
+    // 새 위치에 추가
+    if(target){const tm=t.menus.find(m=>m.id===target);
+      tm.ing=tm.ing||[]; tm.ing.push({n:nn,q:isNaN(nq)?1:nq,u:nu,c:sel}); tm.picked=true;
+      saveToLibrary(tm.name,tm.emoji,tm.ing,t.people||1,tm.gear);}
+    else t.extras.push({n:nn,q:isNaN(nq)?1:nq,u:nu,c:sel});
+    const newKey=nn+'|'+nu;
+    t.excluded=(t.excluded||[]).filter(k=>k!==newKey&&k!==key);
+    save();closeSheet();render();
+    const where=target?t.menus.find(m=>m.id===target).name:'직접 항목';
+    toast(`저장했습니다 · ${where}`);
   };
   $('#b-del').onclick=()=>{closeSheet();deleteBuyItem(key);};
 }
