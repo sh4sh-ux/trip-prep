@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>여행 준비 앱 · 미리보기</title>
+<style>
+:root{
+  --bg:#F7F7F8;--card:#fff;
+  --label:#111;--label2:#666;--label3:#B0B0B8;
+  --sep:#EBEBED;--sep2:#D4D4D8;--fill:#F3F3F5;--fill2:#F8F8FA;
+  --blue:#0071E3;--blue-bg:#EBF3FF;--blue-txt:#0055B8;
+  --green:#1DAD53;--green-bg:#EDFAF3;--green-txt:#13823D;
+  --red:#E53E3E;--red-bg:#FFF0F0;
+  --orange:#F08C00;--orange-bg:#FFF6E5;--orange-txt:#B36B00;
+  --r:16px;--rm:10px;--rs:9px;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html,body{background:#E8E8EC;font-family:-apple-system,'SF Pro Text','Apple SD Gothic Neo','Helvetica Neue',Arial,sans-serif;font-size:14px;color:var(--label);min-height:100vh;}
+button{font-family:inherit;cursor:pointer;border:none;background:transparent;color:inherit;}
+svg{display:block;flex-shrink:0;}
+
+/* ---------- 프레임 ---------- */
+.stage{display:flex;justify-content:center;align-items:flex-start;padding:36px 16px 60px;gap:28px;flex-wrap:wrap;}
+.phone{width:390px;max-width:100%;background:var(--bg);border-radius:38px;border:1px solid #d0d0d6;
+  box-shadow:0 2px 6px rgba(0,0,0,.06),0 22px 60px rgba(0,0,0,.16);overflow:hidden;position:relative;}
+.notch{height:26px;background:var(--card);display:flex;align-items:flex-end;justify-content:center;}
+.notch i{width:110px;height:5px;border-radius:3px;background:#1a1a1a;opacity:.85;margin-bottom:5px;}
+.screen{height:748px;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+.screen::-webkit-scrollbar{display:none;}
+@media(max-width:460px){
+  .stage{padding:0;}
+  .phone{border-radius:0;border:none;box-shadow:none;width:100%;}
+  .notch{display:none;}
+  .screen{height:100vh;}
+}
+
+/* ---------- 헤더 ---------- */
+.hd{background:var(--card);padding:14px 20px 0;border-bottom:1px solid var(--sep);position:sticky;top:0;z-index:20;}
+.hd-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:12px;}
+.trip-name{font-size:21px;font-weight:700;letter-spacing:-.5px;line-height:1.25;}
+.trip-meta{font-size:12.5px;color:var(--label2);margin-top:3px;display:flex;align-items:center;gap:5px;flex-wrap:wrap;}
+.dot-sep{width:2.5px;height:2.5px;border-radius:50%;background:var(--label3);display:inline-block;}
+.dday{background:var(--label);color:#fff;font-size:12px;font-weight:700;padding:5px 11px;border-radius:20px;flex-shrink:0;letter-spacing:-.2px;}
+.tabs{display:flex;}
+.tab{flex:1;font-size:13.5px;font-weight:500;color:var(--label2);padding:11px 0 12px;border-bottom:2px solid transparent;transition:all .15s;}
+.tab.on{color:var(--blue);border-bottom-color:var(--blue);font-weight:600;}
+.body{padding:14px 16px 40px;}
+
+/* ---------- 공용 ---------- */
+.sec{background:var(--card);border-radius:var(--r);overflow:hidden;margin-bottom:12px;}
+.sec-hd{padding:13px 16px;display:flex;align-items:center;justify-content:space-between;gap:8px;position:relative;}
+.sec-title{font-size:11.5px;font-weight:600;color:var(--label2);letter-spacing:.4px;text-transform:uppercase;}
+.sec-note{font-size:12px;color:var(--label3);font-weight:500;}
+.row{display:flex;align-items:center;gap:11px;padding:12px 16px;position:relative;}
+/* 구분선: 카드 좌우에서 16px 안쪽으로 들여쓴 인셋 라인 */
+.sec-hd::after,.row::after{content:'';position:absolute;left:16px;right:16px;bottom:0;height:1px;background:var(--sep);}
+.row:last-child::after{display:none;}
+.acc-body .row::after{left:20px;}
+.grow{flex:1;min-width:0;}
+.muted{color:var(--label2);}
+.tiny{font-size:11.5px;color:var(--label3);margin-top:2px;line-height:1.35;}
+.pill-tag{font-size:10.5px;font-weight:600;padding:2px 7px;border-radius:5px;flex-shrink:0;}
+.tag-cold{background:var(--blue-bg);color:var(--blue-txt);}
+.tag-auto{background:var(--green-bg);color:var(--green-txt);}
+.tag-warn{background:var(--orange-bg);color:var(--orange-txt);}
+
+/* 체크박스 */
+.cb{width:22px;height:22px;border-radius:50%;border:1.6px solid var(--sep2);flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;background:var(--card);transition:all .16s;}
+.cb.on{background:var(--green);border-color:var(--green);}
+.cb svg{opacity:0;transform:scale(.5);transition:all .16s;}
+.cb.on svg{opacity:1;transform:scale(1);}
+.done .txt{color:var(--label3);text-decoration:line-through;text-decoration-color:var(--sep2);}
+.done .tiny{color:#CFCFD6;}
+.qty{font-size:13px;font-weight:600;color:var(--label2);flex-shrink:0;font-variant-numeric:tabular-nums;}
+.done .qty{color:var(--label3);}
+
+/* 진행률 */
+.prog-wrap{padding:15px 16px 16px;background:var(--card);border-radius:var(--r);margin-bottom:12px;}
+.prog-top{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:11px;}
+.prog-lab{font-size:13px;font-weight:600;}
+.prog-num{font-size:13px;font-weight:700;color:var(--blue);font-variant-numeric:tabular-nums;}
+.bar{height:7px;border-radius:4px;background:var(--fill);overflow:hidden;}
+.bar i{display:block;height:100%;border-radius:4px;background:var(--blue);transition:width .35s cubic-bezier(.25,.8,.25,1);}
+
+/* 아코디언 */
+.acc-hd{display:flex;align-items:center;gap:10px;padding:13px 16px;width:100%;text-align:left;border-bottom:1px solid var(--sep);}
+.acc-ic{width:26px;text-align:center;font-size:16px;flex-shrink:0;}
+.acc-name{font-size:14px;font-weight:600;flex:1;}
+.acc-count{font-size:12px;font-weight:600;color:var(--label3);font-variant-numeric:tabular-nums;}
+.acc-count.full{color:var(--green-txt);}
+.chev{transition:transform .22s;color:var(--label3);}
+.acc.open .chev{transform:rotate(90deg);}
+.acc-body{display:none;background:var(--fill2);}
+.acc.open .acc-body{display:block;}
+.acc-body .row{padding-left:20px;background:transparent;}
+.acc:last-child .acc-hd{border-bottom:none;}
+.acc.open:last-child .acc-hd{border-bottom:1px solid var(--sep);}
+
+/* 메뉴 칩 */
+.menu-grid{display:flex;flex-wrap:wrap;gap:8px;padding:14px 16px;}
+.mchip{display:flex;align-items:center;gap:6px;border:1px solid var(--sep2);border-radius:22px;
+  padding:8px 14px 8px 11px;font-size:13.5px;font-weight:500;color:var(--label2);background:var(--card);transition:all .14s;}
+.mchip .e{font-size:15px;}
+.mchip.on{background:var(--label);border-color:var(--label);color:#fff;font-weight:600;}
+.mchip.on .cnt{color:rgba(255,255,255,.6);}
+.cnt{font-size:11px;color:var(--label3);font-weight:500;}
+
+/* 합산 하이라이트 */
+.merged{background:var(--green-bg);}
+.src{font-size:11px;color:var(--green-txt);font-weight:500;}
+.flash{animation:flash .5s ease;}
+@keyframes flash{0%{background:#FFF6D9;}100%{background:transparent;}}
+
+/* 오늘 타임라인 */
+.tl{padding:4px 16px 14px;}
+.tl-item{display:flex;gap:12px;position:relative;padding:11px 0;}
+.tl-item::before{content:'';position:absolute;left:5.5px;top:26px;bottom:-11px;width:1.5px;background:var(--sep);}
+.tl-item:last-child::before{display:none;}
+.tl-dot{width:13px;height:13px;border-radius:50%;border:2.5px solid var(--sep2);background:var(--card);flex-shrink:0;margin-top:4px;z-index:1;}
+.tl-item.now .tl-dot{border-color:var(--blue);background:var(--blue);box-shadow:0 0 0 4px var(--blue-bg);}
+.tl-item.past .tl-dot{background:var(--sep2);border-color:var(--sep2);}
+.tl-time{font-size:12px;font-weight:600;color:var(--label2);font-variant-numeric:tabular-nums;}
+.tl-item.now .tl-time{color:var(--blue);}
+.tl-title{font-size:14px;font-weight:600;margin-top:1px;}
+.tl-item.past .tl-title,.tl-item.past .tl-time{color:var(--label3);}
+
+.hero{background:var(--card);border-radius:var(--r);padding:18px 16px;margin-bottom:12px;}
+.hero-lab{font-size:11.5px;font-weight:600;color:var(--label2);letter-spacing:.4px;text-transform:uppercase;margin-bottom:8px;}
+.hero-big{font-size:26px;font-weight:700;letter-spacing:-.6px;}
+.hero-sub{font-size:12.5px;color:var(--label2);margin-top:5px;}
+
+.banner{display:flex;gap:10px;align-items:flex-start;background:var(--orange-bg);border-radius:var(--rm);padding:12px 14px;margin-bottom:12px;}
+.banner .bi{font-size:15px;line-height:1.3;}
+.banner-t{font-size:13px;font-weight:600;color:var(--orange-txt);}
+.banner-d{font-size:12px;color:var(--orange-txt);opacity:.85;margin-top:2px;line-height:1.45;}
+
+.addbtn{width:100%;padding:13px;font-size:13.5px;font-weight:500;color:var(--label2);
+  display:flex;align-items:center;justify-content:center;gap:6px;}
+.addbtn .plus{width:20px;height:20px;border-radius:50%;background:var(--green-bg);color:var(--green-txt);
+  display:flex;align-items:center;justify-content:center;font-size:15px;line-height:1;}
+
+.seg{display:flex;gap:2px;background:var(--fill);border-radius:10px;padding:3px;margin-bottom:12px;}
+.seg button{flex:1;font-size:13px;font-weight:500;color:var(--label2);padding:7px 0;border-radius:8px;transition:all .15s;}
+.seg button.on{background:var(--card);color:var(--label);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.07);}
+
+.empty{padding:34px 20px;text-align:center;color:var(--label3);font-size:13px;line-height:1.6;}
+.pane{display:none;}
+.pane.on{display:block;}
+
+/* 캡션 */
+.caption{max-width:390px;width:100%;padding-top:6px;}
+.caption h3{font-size:14px;font-weight:700;margin-bottom:8px;}
+.caption p{font-size:13px;color:#5a5a62;line-height:1.65;margin-bottom:10px;}
+.caption b{color:#111;font-weight:600;}
+@media(max-width:460px){.caption{display:none;}}
+</style>
+</head>
+<body>
+<div class="stage">
+<div class="phone">
+  <div class="notch"><i></i></div>
+  <div class="screen">
+
+    <div class="hd">
+      <div class="hd-top">
+        <div>
+          <div class="trip-name">제주 가족여행</div>
+          <div class="trip-meta">
+            <span>8/6 – 8/8</span><span class="dot-sep"></span>
+            <span>2박 3일</span><span class="dot-sep"></span>
+            <span>4명</span><span class="dot-sep"></span>
+            <span>애월 풀빌라</span>
+          </div>
+        </div>
+        <div class="dday">D-1</div>
+      </div>
+      <div class="tabs">
+        <button class="tab on" data-tab="today">오늘</button>
+        <button class="tab" data-tab="pack">준비물</button>
+        <button class="tab" data-tab="market">장보기</button>
+      </div>
+    </div>
+
+    <div class="body">
+
+      <!-- ================= 오늘 ================= -->
+      <div class="pane on" id="pane-today">
+        <div class="banner">
+          <div class="bi">🧊</div>
+          <div>
+            <div class="banner-t">콜드체인 · 출발 2시간 전</div>
+            <div class="banner-d">삼겹살 · 김치 · 두부는 아이스박스에. 냉동 아이스팩 3개 미리 얼려두세요.</div>
+          </div>
+        </div>
+
+        <div class="hero">
+          <div class="hero-lab">출발까지</div>
+          <div class="hero-big">14시간 20분</div>
+          <div class="hero-sub">준비물 <b id="t-pack">12/34</b> · 장볼 것 <b id="t-mkt">0개</b> 남음</div>
+        </div>
+
+        <div class="sec">
+          <div class="sec-hd"><div class="sec-title">오늘 일정 · 8/5 (수)</div><div class="sec-note">D-1</div></div>
+          <div class="tl">
+            <div class="tl-item past"><div class="tl-dot"></div><div class="grow">
+              <div class="tl-time">10:00</div><div class="tl-title">렌터카 예약 확정</div></div></div>
+            <div class="tl-item now"><div class="tl-dot"></div><div class="grow">
+              <div class="tl-time">19:00 · 지금</div><div class="tl-title">마트 장보기</div>
+              <div class="tiny">이마트 서귀포점 · 통합 목록 <b id="t-mkt2">0개</b></div></div></div>
+            <div class="tl-item"><div class="tl-dot"></div><div class="grow">
+              <div class="tl-time">21:00</div><div class="tl-title">짐 싸기 · 아이스박스 정리</div></div></div>
+            <div class="tl-item"><div class="tl-dot"></div><div class="grow">
+              <div class="tl-time">23:00</div><div class="tl-title">출발 직전 체크</div>
+              <div class="tiny">가스 · 전등 · 창문 · 충전 중인 기기</div></div></div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sec-hd"><div class="sec-title">내일 메뉴</div><div class="sec-note">Day 1</div></div>
+          <div class="row"><div class="acc-ic">🥓</div><div class="grow">
+            <div class="txt" style="font-weight:600">저녁 · 삼겹살</div>
+            <div class="tiny">삼겹살 1.2kg · 상추 · 대파 · 쌈장</div></div>
+            <span class="pill-tag tag-cold">냉장</span></div>
+          <div class="row"><div class="acc-ic">🍞</div><div class="grow">
+            <div class="txt" style="font-weight:600">아침 · 토스트</div>
+            <div class="tiny">식빵 · 계란 · 버터 · 딸기잼</div></div></div>
+        </div>
+      </div>
+
+      <!-- ================= 준비물 ================= -->
+      <div class="pane" id="pane-pack">
+        <div class="prog-wrap">
+          <div class="prog-top">
+            <div class="prog-lab">짐 싸기</div>
+            <div class="prog-num" id="p-num">12 / 34</div>
+          </div>
+          <div class="bar"><i id="p-bar" style="width:35%"></i></div>
+        </div>
+
+        <div class="banner" style="background:var(--green-bg)">
+          <div class="bi">✨</div>
+          <div>
+            <div class="banner-t" style="color:var(--green-txt)">국내 · 2박3일 · 4명 기준으로 자동 생성됨</div>
+            <div class="banner-d" style="color:var(--green-txt)">상의·속옷 수량은 박수에 맞춰 계산됐습니다. 여권은 해외가 아니라 빠졌어요.</div>
+          </div>
+        </div>
+
+        <div class="sec" id="pack-list"></div>
+      </div>
+
+      <!-- ================= 장보기 ================= -->
+      <div class="pane" id="pane-market">
+        <div class="seg">
+          <button class="on" data-seg="menu">메뉴 고르기</button>
+          <button data-seg="list">장볼 것 <span id="s-cnt"></span></button>
+        </div>
+
+        <div id="seg-menu">
+          <div class="sec">
+            <div class="sec-hd"><div class="sec-title">MENU LAB</div><div class="sec-note">탭해서 선택</div></div>
+            <div class="menu-grid" id="menu-grid"></div>
+            <button class="addbtn" style="border-top:1px solid var(--sep)">
+              <span class="plus">+</span> 메뉴 추가</button>
+          </div>
+          <div class="banner" style="background:var(--blue-bg)">
+            <div class="bi">🛒</div>
+            <div>
+              <div class="banner-t" style="color:var(--blue-txt)">고른 메뉴의 재료가 자동으로 합쳐집니다</div>
+              <div class="banner-d" style="color:var(--blue-txt)">떡볶이와 김밥을 같이 고르면 당근이 3개로 합산돼요. '장볼 것' 탭에서 확인해 보세요.</div>
+            </div>
+          </div>
+        </div>
+
+        <div id="seg-list" style="display:none">
+          <div class="prog-wrap">
+            <div class="prog-top">
+              <div class="prog-lab">통합 장보기</div>
+              <div class="prog-num" id="m-num">0 / 0</div>
+            </div>
+            <div class="bar"><i id="m-bar" style="width:0%"></i></div>
+          </div>
+          <div id="market-list"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div class="caption">
+  <h3>눌러보세요</h3>
+  <p><b>장보기 → 메뉴 고르기</b>에서 떡볶이와 김밥을 같이 켜면, <b>장볼 것</b> 탭의 당근이 3개로 합쳐집니다. 어느 메뉴에서 왔는지도 같이 표시돼요. Notion에서 가장 안 되던 부분입니다.</p>
+  <p><b>준비물</b> 탭의 카테고리를 열어 체크해 보세요. 카테고리별·전체 진행률이 같이 움직입니다.</p>
+  <p><b>오늘</b> 탭은 여행 중에 여는 화면입니다. 지금 할 일과 남은 개수만 보여주고, 나머지는 숨깁니다.</p>
+</div>
+</div>
+
+<script>
+/* ================= 데이터 ================= */
+const NIGHTS = 2, PEOPLE = 4;
+
+const PACK = [
+  {ic:'🪪', name:'신분·필수', items:[
+    {n:'신분증',q:''},{n:'지갑',q:''},{n:'카드 · 현금',q:''},{n:'자동차키',q:''},
+    {n:'숙소 예약 확인서',q:''},{n:'렌터카 바우처',q:''}]},
+  {ic:'🧴', name:'세면·욕실', items:[
+    {n:'세안폼',q:''},{n:'칫솔',q:'×4',s:'인원수'},{n:'치약',q:''},{n:'샴푸 · 린스',q:''},
+    {n:'헤어밴드',q:''},{n:'면도기',q:''},{n:'수건',q:'×4',s:'인원수'}]},
+  {ic:'👕', name:'옷', items:[
+    {n:'상의',q:'×3',s:'2박3일'},{n:'하의',q:'×2',s:'2박3일'},{n:'속옷',q:'×3',s:'2박3일'},
+    {n:'양말',q:'×3',s:'2박3일'},{n:'잠옷',q:''},{n:'겉옷',q:''},{n:'슬리퍼',q:''}]},
+  {ic:'🔌', name:'충전·전자', items:[
+    {n:'휴대전화 충전기',q:''},{n:'애플워치 충전기',q:''},{n:'보조배터리',q:''},
+    {n:'이어폰',q:''},{n:'멀티탭',q:''},{n:'차량 거치대',q:''}]},
+  {ic:'💊', name:'건강·상비약', items:[
+    {n:'상비약',q:''},{n:'밴드',q:''},{n:'멀미약',q:''},{n:'선크림',q:''},{n:'안경 · 렌즈',q:''}]},
+  {ic:'🧊', name:'아이스박스', items:[
+    {n:'아이스박스',q:''},{n:'아이스팩',q:'×3'},{n:'지퍼백',q:''}]},
+];
+
+const MENUS = [
+  {id:'tteok', e:'🍢', name:'떡볶이', ing:[
+    {n:'떡볶이 떡',q:1,u:'봉',c:'냉장'},{n:'어묵',q:1,u:'봉',c:'냉장'},
+    {n:'당근',q:1,u:'개',c:'채소'},{n:'양파',q:1,u:'개',c:'채소'},
+    {n:'대파',q:1,u:'단',c:'채소'},{n:'고추장',q:1,u:'통',c:'소스·양념'}]},
+  {id:'kimbap', e:'🍙', name:'김밥', ing:[
+    {n:'김',q:1,u:'봉',c:'기타'},{n:'당근',q:2,u:'개',c:'채소'},
+    {n:'단무지',q:1,u:'봉',c:'냉장'},{n:'햄',q:1,u:'팩',c:'냉장'},
+    {n:'계란',q:6,u:'개',c:'냉장'},{n:'참기름',q:1,u:'통',c:'소스·양념'}]},
+  {id:'pork', e:'🥓', name:'삼겹살', ing:[
+    {n:'삼겹살',q:1.2,u:'kg',c:'정육'},{n:'상추',q:1,u:'봉',c:'채소'},
+    {n:'대파',q:1,u:'단',c:'채소'},{n:'쌈장',q:1,u:'통',c:'소스·양념'}]},
+  {id:'jjigae', e:'🍲', name:'김치찌개', ing:[
+    {n:'김치',q:1,u:'봉',c:'냉장'},{n:'목살',q:0.4,u:'kg',c:'정육'},
+    {n:'두부',q:1,u:'모',c:'냉장'},{n:'대파',q:1,u:'단',c:'채소'},
+    {n:'고춧가루',q:1,u:'통',c:'소스·양념'}]},
+  {id:'toast', e:'🍞', name:'아침 토스트', ing:[
+    {n:'식빵',q:1,u:'봉',c:'기타'},{n:'계란',q:6,u:'개',c:'냉장'},
+    {n:'버터',q:1,u:'개',c:'냉장'},{n:'딸기잼',q:1,u:'통',c:'소스·양념'}]},
+];
+
+const CAT_ORDER = ['채소','정육','냉장','소스·양념','기타'];
+const CAT_IC = {'채소':'🥬','정육':'🥩','냉장':'❄️','소스·양념':'🧂','기타':'🛒'};
+const COLD = {'정육':1,'냉장':1};
+
+/* ================= 상태 ================= */
+const packOn = new Set(['신분증','지갑','카드 · 현금','자동차키','상의','하의','속옷','양말',
+                        '휴대전화 충전기','이어폰','상비약','선크림']);
+const openCat = new Set(['옷']);
+const pickedMenus = new Set(['pork','toast']);
+const boughtItems = new Set();
+let lastMerged = new Set();
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const CHECK = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+const CHEV = '<svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>';
+
+/* ================= 준비물 ================= */
+function renderPack(){
+  let total=0, done=0;
+  const html = PACK.map(cat=>{
+    const c = cat.items.filter(i=>packOn.has(i.n)).length;
+    total += cat.items.length; done += c;
+    const open = openCat.has(cat.name);
+    const rows = cat.items.map(i=>{
+      const on = packOn.has(i.n);
+      return `<div class="row ${on?'done':''}" data-pack="${esc(i.n)}">
+        <div class="cb ${on?'on':''}">${CHECK}</div>
+        <div class="grow"><div class="txt">${esc(i.n)}</div>
+        ${i.s?`<div class="tiny">${esc(i.s)} 기준 자동</div>`:''}</div>
+        ${i.q?`<div class="qty">${esc(i.q)}</div>`:''}</div>`;
+    }).join('');
+    return `<div class="acc ${open?'open':''}">
+      <button class="acc-hd" data-cat="${esc(cat.name)}">
+        <span class="acc-ic">${cat.ic}</span>
+        <span class="acc-name">${esc(cat.name)}</span>
+        <span class="acc-count ${c===cat.items.length?'full':''}">${c}/${cat.items.length}</span>
+        ${CHEV}</button>
+      <div class="acc-body">${rows}
+        <button class="addbtn"><span class="plus">+</span> 항목 추가</button></div></div>`;
+  }).join('');
+  $('#pack-list').innerHTML = html;
+  const pct = total? Math.round(done/total*100):0;
+  $('#p-num').textContent = `${done} / ${total}`;
+  $('#p-bar').style.width = pct+'%';
+  $('#t-pack').textContent = `${done}/${total}`;
+}
+
+/* ================= 메뉴 → 장보기 합산 ================= */
+function mergeIngredients(){
+  const map = new Map();
+  MENUS.filter(m=>pickedMenus.has(m.id)).forEach(m=>{
+    m.ing.forEach(i=>{
+      const key = i.n+'|'+i.u;
+      if(!map.has(key)) map.set(key,{n:i.n,u:i.u,c:i.c,q:0,from:[]});
+      const e = map.get(key);
+      e.q += i.q;
+      e.from.push(m.name);
+    });
+  });
+  return map;
+}
+
+function renderMenus(){
+  $('#menu-grid').innerHTML = MENUS.map(m=>{
+    const on = pickedMenus.has(m.id);
+    return `<button class="mchip ${on?'on':''}" data-menu="${m.id}">
+      <span class="e">${m.e}</span>${esc(m.name)}
+      <span class="cnt">${m.ing.length}</span></button>`;
+  }).join('');
+}
+
+function renderMarket(){
+  const map = mergeIngredients();
+  const items = [...map.values()];
+  const nowMerged = new Set(items.filter(i=>i.from.length>1).map(i=>i.n+'|'+i.u));
+
+  const total = items.length;
+  const done = items.filter(i=>boughtItems.has(i.n+'|'+i.u)).length;
+  $('#m-num').textContent = `${done} / ${total}`;
+  $('#m-bar').style.width = total? Math.round(done/total*100)+'%':'0%';
+  const left = total-done;
+  $('#s-cnt').textContent = total? `${left}` : '';
+  $('#t-mkt').textContent = `${left}개`;
+  $('#t-mkt2').textContent = `${left}개`;
+
+  if(!total){
+    $('#market-list').innerHTML =
+      `<div class="sec"><div class="empty">고른 메뉴가 없습니다.<br>‘메뉴 고르기’에서 먼저 선택해 주세요.</div></div>`;
+    lastMerged = nowMerged; return;
+  }
+
+  const html = CAT_ORDER.filter(c=>items.some(i=>i.c===c)).map(cat=>{
+    const rows = items.filter(i=>i.c===cat).map(i=>{
+      const key = i.n+'|'+i.u;
+      const on = boughtItems.has(key);
+      const multi = i.from.length>1;
+      const isNew = multi && !lastMerged.has(key);
+      const qty = Number.isInteger(i.q)? i.q : i.q.toFixed(1);
+      const srcTxt = i.from.join(' · ');
+      const showSrc = multi || srcTxt !== i.n;
+      return `<div class="row ${on?'done':''} ${isNew?'flash':''}" data-buy="${esc(key)}">
+        <div class="cb ${on?'on':''}">${CHECK}</div>
+        <div class="grow"><div class="txt">${esc(i.n)}</div>
+          ${showSrc?`<div class="tiny ${multi?'src':''}">${multi?'합산 · ':''}${esc(srcTxt)}</div>`:''}</div>
+        ${COLD[cat]?'<span class="pill-tag tag-cold">콜드</span>':''}
+        <div class="qty">${qty}${esc(i.u)}</div></div>`;
+    }).join('');
+    const cnt = items.filter(i=>i.c===cat).length;
+    return `<div class="sec">
+      <div class="sec-hd"><div class="sec-title">${CAT_IC[cat]} ${esc(cat)}</div>
+        <div class="sec-note">${cnt}개</div></div>${rows}</div>`;
+  }).join('');
+  $('#market-list').innerHTML = html;
+  lastMerged = nowMerged;
+}
+
+/* ================= 이벤트 ================= */
+document.addEventListener('click', e=>{
+  const tab = e.target.closest('.tab');
+  if(tab){
+    document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t===tab));
+    document.querySelectorAll('.pane').forEach(p=>
+      p.classList.toggle('on', p.id==='pane-'+ (tab.dataset.tab==='market'?'market':tab.dataset.tab)));
+    $('.screen').scrollTop = 0;
+    return;
+  }
+  const seg = e.target.closest('.seg button');
+  if(seg){
+    document.querySelectorAll('.seg button').forEach(b=>b.classList.toggle('on',b===seg));
+    $('#seg-menu').style.display = seg.dataset.seg==='menu'?'':'none';
+    $('#seg-list').style.display = seg.dataset.seg==='list'?'':'none';
+    if(seg.dataset.seg==='list') renderMarket();
+    return;
+  }
+  const acc = e.target.closest('[data-cat]');
+  if(acc){
+    const n = acc.dataset.cat;
+    openCat.has(n)? openCat.delete(n) : openCat.add(n);
+    renderPack(); return;
+  }
+  const pk = e.target.closest('[data-pack]');
+  if(pk){
+    const n = pk.dataset.pack;
+    packOn.has(n)? packOn.delete(n) : packOn.add(n);
+    renderPack(); return;
+  }
+  const mc = e.target.closest('[data-menu]');
+  if(mc){
+    const id = mc.dataset.menu;
+    pickedMenus.has(id)? pickedMenus.delete(id) : pickedMenus.add(id);
+    renderMenus(); renderMarket(); return;
+  }
+  const by = e.target.closest('[data-buy]');
+  if(by){
+    const k = by.dataset.buy;
+    boughtItems.has(k)? boughtItems.delete(k) : boughtItems.add(k);
+    renderMarket(); return;
+  }
+});
+
+renderPack(); renderMenus(); renderMarket();
+</script>
+</body>
+</html>
