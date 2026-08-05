@@ -68,6 +68,41 @@ button.tap{text-align:left;background:transparent;border:none;padding:0;font:inh
 .step-i{flex:1;min-width:0;text-align:center;border:none;outline:none;height:46px;
   font-size:17px;font-weight:700;background:var(--card);color:var(--label);appearance:textfield;}
 .step-i::-webkit-outer-spin-button,.step-i::-webkit-inner-spin-button{appearance:none;margin:0;}
+
+/* 날짜·시간 피커 (두 번째 시트 레이어) */
+.dim2{z-index:110;}
+.sheet2{z-index:111;}
+.fld-btn{display:flex;align-items:center;justify-content:space-between;gap:8px;
+  text-align:left;background:var(--bg);font-size:15px;font-weight:500;cursor:pointer;}
+.fld-btn .ph{color:var(--label3);font-weight:400;}
+.fld-btn .ic{color:var(--label3);flex-shrink:0;}
+.cal-hd{display:flex;align-items:center;justify-content:space-between;padding:2px 4px 12px;}
+.cal-title{font-size:15.5px;font-weight:700;letter-spacing:-.2px;}
+.cal-nav{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;
+  justify-content:center;color:var(--label2);}
+.cal-nav:active{background:var(--fill);}
+.cal-nav:disabled{color:#DCDCE0;}
+.cal-dow{display:grid;grid-template-columns:repeat(7,1fr);margin-bottom:4px;}
+.cal-dow span{text-align:center;font-size:11.5px;font-weight:600;color:var(--label3);padding:4px 0;}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;}
+.cal-c{height:42px;}
+.cal-d{border-radius:50%;font-size:14.5px;font-weight:500;color:var(--label);
+  display:flex;align-items:center;justify-content:center;}
+.cal-d.sun{color:#E5484D;} .cal-d.sat{color:#3E63DD;}
+.cal-d.today{font-weight:800;text-decoration:underline;text-underline-offset:3px;}
+.cal-d.on{background:var(--label);color:#fff;font-weight:700;}
+.cal-d.dis{color:#DCDCE0;} .cal-d.dis.sun,.cal-d.dis.sat{color:#DCDCE0;}
+.cal-d:not(.dis):not(.on):active{background:var(--fill);}
+.pk-sec{margin-top:18px;}
+.hr-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:5px;}
+.hr-b{height:38px;border:1px solid var(--sep);border-radius:8px;font-size:13.5px;
+  font-weight:500;color:var(--label2);background:var(--card);}
+.hr-b.on{background:var(--label);border-color:var(--label);color:#fff;font-weight:700;}
+.mn-row{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;}
+.mn-b{flex:1;min-width:56px;height:36px;border:1px solid var(--sep);border-radius:8px;
+  font-size:13px;font-weight:500;color:var(--label2);background:var(--card);}
+.mn-b.on{background:var(--label);border-color:var(--label);color:#fff;font-weight:700;}
+.pk-now{font-size:13px;font-weight:700;color:var(--blue);}
 .txt{font-size:14px;line-height:1.35;word-break:break-word;}
 .tiny{font-size:11.5px;color:var(--label3);margin-top:2px;line-height:1.35;}
 .pill-tag{font-size:10.5px;font-weight:600;padding:2px 7px;border-radius:5px;flex-shrink:0;}
@@ -215,11 +250,13 @@ textarea.inp{resize:vertical;min-height:92px;line-height:1.55;}
 
 .toast-wrap{position:fixed;left:0;right:0;bottom:calc(env(safe-area-inset-bottom,0px) + 24px);z-index:200;
   display:flex;justify-content:center;padding:0 20px;pointer-events:none;}
+/* 시트가 열려 있을 땐 하단 버튼과 겹치지 않게 화면 위로 */
+.toast-wrap.up{bottom:auto;top:calc(env(safe-area-inset-top,0px) + 16px);}
 .toast{background:var(--label);color:#fff;padding:12px 16px;border-radius:10px;font-size:14px;
   box-shadow:0 4px 16px rgba(0,0,0,.18);opacity:0;transform:translateY(16px);transition:opacity .25s,transform .25s;
-  display:flex;align-items:center;gap:12px;max-width:100%;line-height:1.4;pointer-events:auto;}
+  display:flex;align-items:center;gap:12px;max-width:100%;line-height:1.4;pointer-events:none;}
 .toast.on{opacity:1;transform:translateY(0);}
-.toast button{color:#5BB0FF;font-weight:700;white-space:nowrap;}
+.toast button{color:#5BB0FF;font-weight:700;white-space:nowrap;pointer-events:auto;}
 
 .onb{padding:60px 24px;text-align:center;}
 .onb-e{font-size:44px;margin-bottom:16px;}
@@ -234,11 +271,13 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;
 <div class="app" id="app"></div>
 <div class="dim" id="dim"></div>
 <div class="sheet" id="sheet"></div>
+<div class="dim dim2" id="dim2"></div>
+<div class="sheet sheet2" id="sheet2"></div>
 <div class="toast-wrap"><div class="toast" id="toast"></div></div>
 
 <script>
 'use strict';
-const VERSION='v0.7', BUILD_TIME='2026-08-05 20:20';
+const VERSION='v0.9', BUILD_TIME='2026-08-05 21:30';
 const KEY='tripprep_v1';
 
 /* ================= 유틸 ================= */
@@ -250,6 +289,8 @@ const CHEV='<svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="n
 const XICO='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
 const DOTS='<svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>';
 const CARET='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
+const CLOCKICO='<svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>';
+const CALICO='<svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
 
 const todayStr=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
 const parseD=s=>{const [y,m,d]=String(s||'').split('-').map(Number);return (y&&m&&d)?new Date(y,m-1,d):null;};
@@ -676,7 +717,7 @@ function viewToday(t){
   const tl=plans.length?`<div class="tl">${plans.map((p,i)=>`
     <div class="tl-item ${i===nowIdx?'now':(nowIdx>=0&&i<nowIdx?'past':'')}" data-plan="${p.id}">
       <div class="tl-dot"></div>
-      <div class="grow"><div class="tl-time">${esc(p.time||'시간 미정')}${i===nowIdx?' · 지금':''}</div>
+      <div class="grow"><div class="tl-time">${esc((p.time||'시간 미정')+(p.end?' – '+p.end:''))}${i===nowIdx?' · 지금':''}</div>
         <div class="tl-title">${esc(p.title)}</div>
         ${p.note?`<div class="tiny">${esc(p.note)}</div>`:''}</div>
       <button class="del-x" data-delplan="${p.id}">${XICO}</button>
@@ -831,10 +872,16 @@ function viewMarket(t){
 }
 
 /* ================= 시트 ================= */
+// 시트가 하나라도 열려 있으면 토스트를 화면 위로 (하단 버튼과 겹침 방지)
+function positionToast(){
+  const up=$('#sheet').classList.contains('on')||$('#sheet2').classList.contains('on');
+  document.querySelector('.toast-wrap').classList.toggle('up',up);
+}
+
 function openSheet(html){
   const sh=$('#sheet');
   sh.innerHTML='<div class="sh-handle"></div>'+html;
-  sh.classList.add('on');$('#dim').classList.add('on');
+  sh.classList.add('on');$('#dim').classList.add('on');positionToast();
   // 엔터로 기본 버튼 실행 (자동완성이 열려 있으면 첫 후보 선택)
   const primary=sh.querySelector('.btn:not(.ghost)');
   sh.querySelectorAll('input.inp').forEach(inp=>{
@@ -852,9 +899,105 @@ function openSheet(html){
 function closeSheet(){
   const sh=$('#sheet');
   sh.classList.remove('on');$('#dim').classList.remove('on');
-  sh.style.bottom='';sh.style.maxHeight='';
+  sh.style.bottom='';sh.style.maxHeight='';positionToast();
 }
 $('#dim').onclick=closeSheet;
+
+/* ---------- 날짜·시간 피커 (시트 위에 겹치는 두 번째 레이어) ---------- */
+const PK_MINUTES=['00','10','15','20','30','40','45','50'];
+let PK=null;   // {date,time,min,max,withTime,onDone,cur:{y,m}}
+
+function openPicker(o){
+  const base=parseD(o.date)||new Date();
+  PK={date:o.date||'', time:o.time||'', min:o.min||'', max:o.max||'',
+      withTime:!!o.withTime, timeOnly:!!o.timeOnly,
+      title:o.title||'날짜 선택', onDone:o.onDone,
+      cur:{y:base.getFullYear(),m:base.getMonth()}};
+  renderPicker();
+  $('#sheet2').classList.add('on'); $('#dim2').classList.add('on'); positionToast();
+}
+function closePicker(){PK=null;$('#sheet2').classList.remove('on');$('#dim2').classList.remove('on');positionToast();}
+$('#dim2').onclick=closePicker;
+
+function renderPicker(){
+  const {y,m}=PK.cur, today=todayStr();
+  const startDow=new Date(y,m,1).getDay(), days=new Date(y,m+1,0).getDate();
+  const pad=n=>String(n).padStart(2,'0');
+  let cells='';
+  for(let i=0;i<startDow;i++)cells+='<div class="cal-c"></div>';
+  for(let d=1;d<=days;d++){
+    const ds=`${y}-${pad(m+1)}-${pad(d)}`;
+    const dis=(PK.min&&ds<PK.min)||(PK.max&&ds>PK.max);
+    const dow=new Date(y,m,d).getDay();
+    cells+=`<button class="cal-c cal-d ${ds===PK.date?'on':''} ${dis?'dis':''}
+      ${dow===0?'sun':''} ${dow===6?'sat':''} ${ds===today?'today':''}"
+      ${dis?'disabled':''} data-d="${ds}">${d}</button>`;
+  }
+  // 앞뒤 달 이동 가능 여부
+  const prevLast=`${y}-${pad(m)}-31`, nextFirst=`${m===11?y+1:y}-${pad(m===11?1:m+2)}-01`;
+  const noPrev=PK.min&&prevLast<PK.min, noNext=PK.max&&nextFirst>PK.max;
+
+  const hh=PK.time?PK.time.slice(0,2):'', mm=PK.time?PK.time.slice(3,5):'';
+  const timeHtml=PK.withTime?`
+    <div class="pk-sec">
+      <div class="prog-top"><div class="fld-lab" style="margin:0">시간</div>
+        <div class="pk-now">${PK.time||'시간 미정'}</div></div>
+      <div class="hr-grid">
+        ${Array.from({length:24},(_,h)=>
+          `<button class="hr-b ${hh===pad(h)?'on':''}" data-h="${pad(h)}">${h}시</button>`).join('')}
+      </div>
+      <div class="mn-row">
+        ${PK_MINUTES.map(v=>`<button class="mn-b ${mm===v?'on':''}" data-m="${v}">${v}분</button>`).join('')}
+        <button class="mn-b ${PK.time?'':'on'}" data-m="">미정</button>
+      </div>
+    </div>`:'';
+
+  const calHtml=PK.timeOnly?'':`
+      <div class="cal-hd">
+        <button class="cal-nav" id="pk-prev" ${noPrev?'disabled':''}>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+        <div class="cal-title">${y}년 ${m+1}월</div>
+        <button class="cal-nav" id="pk-next" ${noNext?'disabled':''}>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>
+      </div>
+      <div class="cal-dow">${['일','월','화','수','목','금','토']
+        .map((d,i)=>`<span style="${i===0?'color:#E5484D':i===6?'color:#3E63DD':''}">${d}</span>`).join('')}</div>
+      <div class="cal-grid" id="pk-grid">${cells}</div>`;
+
+  $('#sheet2').innerHTML=`
+    <div class="sh-handle"></div>
+    <div class="sh-hd"><div class="sh-title">${esc(PK.title)}</div>
+      <button class="icon-btn" id="pk-x">${XICO}</button></div>
+    <div class="sh-body">
+      ${calHtml}
+      ${timeHtml}
+      <button class="btn" id="pk-done" ${(PK.timeOnly||PK.date)?'':'disabled'}>확인</button>
+    </div>`;
+
+  $('#pk-x').onclick=closePicker;
+  if(!PK.timeOnly){
+    $('#pk-prev').onclick=()=>{PK.cur.m--;if(PK.cur.m<0){PK.cur.m=11;PK.cur.y--;}renderPicker();};
+    $('#pk-next').onclick=()=>{PK.cur.m++;if(PK.cur.m>11){PK.cur.m=0;PK.cur.y++;}renderPicker();};
+    $('#pk-grid').onclick=ev=>{const b=ev.target.closest('[data-d]');if(!b)return;
+      PK.date=b.dataset.d;renderPicker();};
+  }
+  if(PK.withTime){
+    $('#sheet2').querySelector('.hr-grid').onclick=ev=>{
+      const b=ev.target.closest('[data-h]');if(!b)return;
+      PK.time=b.dataset.h+':'+(PK.time?PK.time.slice(3,5):'00');renderPicker();};
+    $('#sheet2').querySelector('.mn-row').onclick=ev=>{
+      const b=ev.target.closest('[data-m]');if(!b)return;
+      if(b.dataset.m===''){PK.time='';}
+      else PK.time=(PK.time?PK.time.slice(0,2):'09')+':'+b.dataset.m;
+      renderPicker();};
+  }
+  $('#pk-done').onclick=()=>{
+    if(!PK.timeOnly&&!PK.date){toast('날짜를 선택해 주세요');return;}
+    const {date,time,onDone}=PK; closePicker(); onDone&&onDone(date,time);
+  };
+}
 
 // 모바일 키보드가 올라와도 시트 버튼이 가려지지 않게
 function fitSheetToKeyboard(){
@@ -902,8 +1045,10 @@ function sheetTripForm(edit){
           `<button class="chip ${((t?t.type:'domestic')===x.k)?'on':''}" data-type="${x.k}">${x.n}</button>`).join('')}</div></div>
       <div class="hint">유형에 따라 준비물이 달라집니다. 해외면 여권·변환어댑터가 붙고, 국내면 자동차키가 붙습니다.</div>
       <div class="fld"><div class="fld-lab">날짜</div>
-        <div class="row2"><input class="inp" type="date" id="f-start" value="${s}">
-          <input class="inp" type="date" id="f-end" value="${e}"></div></div>
+        <div class="row2">
+          <button class="inp fld-btn" id="f-start"><span id="f-start-t">${fmtFull(s)}</span>${CALICO}</button>
+          <button class="inp fld-btn" id="f-end"><span id="f-end-t">${fmtFull(e)}</span>${CALICO}</button>
+        </div></div>
       <div class="row2">
         <div class="fld"><div class="fld-lab">인원</div>
           <input class="inp" type="number" id="f-people" min="1" max="30" value="${t?t.people:2}"></div>
@@ -914,13 +1059,20 @@ function sheetTripForm(edit){
       ${edit?`<button class="btn ghost" id="f-regen">준비물 다시 생성</button>`:''}
     </div>`);
 
-  let type=t?t.type:'domestic';
+  let type=t?t.type:'domestic', ds=s, de=e;
   $('#f-type').onclick=ev=>{const b=ev.target.closest('[data-type]');if(!b)return;
     type=b.dataset.type;$('#f-type').querySelectorAll('.chip').forEach(c=>c.classList.toggle('on',c===b));};
+  // 시작일에는 상한을 두지 않고, 기간(박수)을 유지한 채 종료일이 따라오게 함
+  $('#f-start').onclick=()=>openPicker({title:'시작일',date:ds,onDone:d=>{
+    const nights=Math.max(0,diffDays(ds,de));
+    ds=d; de=addDays(ds,nights);
+    $('#f-start-t').textContent=fmtFull(ds);
+    $('#f-end-t').textContent=fmtFull(de);}});
+  $('#f-end').onclick=()=>openPicker({title:'종료일',date:de,min:ds,onDone:d=>{
+    de=d; $('#f-end-t').textContent=fmtFull(de);}});
 
   $('#f-save').onclick=()=>{
     const name=$('#f-name').value.trim();
-    const ds=$('#f-start').value, de=$('#f-end').value;
     if(!name){toast('여행 이름을 입력해 주세요');return;}
     if(!ds||!de){toast('날짜를 선택해 주세요');return;}
     if(diffDays(ds,de)<0){toast('종료일이 시작일보다 빠릅니다');return;}
@@ -1253,31 +1405,37 @@ function deleteBuyItem(key){
 }
 
 function sheetAddPlan(){
-  const t=curTrip(),D=daysOf(t);
+  const t=curTrip();
+  let day=UI.day||0, time='', end='';
+  const whenLabel=()=>`${fmtFull(addDays(t.dateStart,day))} · ${time||'시간 미정'}`;
   openSheet(`
     <div class="sh-hd"><div class="sh-title">일정 추가</div>
       <button class="icon-btn" onclick="closeSheet()">${XICO}</button></div>
     <div class="sh-body">
-      <div class="fld"><div class="fld-lab">날짜</div>
-        <div class="chips" id="p-day">${Array.from({length:D},(_,i)=>
-          `<button class="chip ${UI.day===i?'on':''}" data-day="${i}">Day ${i+1}</button>`).join('')}</div></div>
-      <div class="row2">
-        <div class="fld" style="flex:0 0 120px"><div class="fld-lab">시간</div>
-          <input class="inp" type="time" id="p-time"></div>
-        <div class="fld"><div class="fld-lab">일정</div>
-          <input class="inp" id="p-title" placeholder="예: 마트 장보기"></div>
-      </div>
-      <div class="fld"><div class="fld-lab">메모 (선택)</div>
+      <div class="fld"><div class="fld-lab">날짜 · 시작 시간</div>
+        <button class="inp fld-btn" id="p-when"><span id="p-when-t">${whenLabel()}</span>${CALICO}</button></div>
+      <div class="fld"><div class="fld-lab">종료 시간 (선택)</div>
+        <button class="inp fld-btn" id="p-end"><span id="p-end-t" class="ph">없음</span>${CLOCKICO}</button></div>
+      <div class="fld"><div class="fld-lab">일정</div>
+        <input class="inp" id="p-title" placeholder="예: 마트 장보기"></div>
+      <div class="fld"><div class="fld-lab">장소 · 메모 (선택)</div>
         <input class="inp" id="p-note" placeholder="예: 이마트 서귀포점"></div>
       <button class="btn" id="p-save">추가</button>
     </div>`);
-  let day=UI.day;
-  $('#p-day').onclick=ev=>{const b=ev.target.closest('[data-day]');if(!b)return;
-    day=Number(b.dataset.day);$('#p-day').querySelectorAll('.chip').forEach(c=>c.classList.toggle('on',c===b));};
+  $('#p-when').onclick=()=>openPicker({
+    title:'날짜 · 시간', date:addDays(t.dateStart,day), time, withTime:true,
+    min:t.dateStart, max:t.dateEnd,
+    onDone:(d,tm)=>{day=Math.max(0,diffDays(t.dateStart,d));time=tm;
+      $('#p-when-t').textContent=whenLabel();}});
+  $('#p-end').onclick=()=>openPicker({
+    title:'종료 시간', timeOnly:true, time:end||time, withTime:true,
+    onDone:(d,tm)=>{end=tm;
+      const el=$('#p-end-t'); el.textContent=end||'없음'; el.classList.toggle('ph',!end);}});
   $('#p-save').onclick=()=>{
     const title=$('#p-title').value.trim();
     if(!title){toast('일정을 입력해 주세요');return;}
-    t.plans.push({id:uid(),day,time:$('#p-time').value,title,note:$('#p-note').value.trim()});
+    if(end&&time&&end<time){toast('종료 시간이 시작보다 빠릅니다');return;}
+    t.plans.push({id:uid(),day,time,end,title,note:$('#p-note').value.trim()});
     UI.day=day; save();closeSheet();render();toast('추가했습니다');
   };
 }
