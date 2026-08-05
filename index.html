@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no,interactive-widget=resizes-content">
 <meta name="theme-color" content="#F7F7F8">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -60,6 +60,7 @@ svg{display:block;flex-shrink:0;}
 .row:last-child::after{display:none;}
 .acc-body .row::after{left:20px;}
 .grow{flex:1;min-width:0;}
+button.tap{text-align:left;background:transparent;border:none;padding:0;font:inherit;color:inherit;}
 .txt{font-size:14px;line-height:1.35;word-break:break-word;}
 .tiny{font-size:11.5px;color:var(--label3);margin-top:2px;line-height:1.35;}
 .pill-tag{font-size:10.5px;font-weight:600;padding:2px 7px;border-radius:5px;flex-shrink:0;}
@@ -230,7 +231,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;
 
 <script>
 'use strict';
-const VERSION='v0.4', BUILD_TIME='2026-08-05 18:40';
+const VERSION='v0.5', BUILD_TIME='2026-08-05 19:20';
 const KEY='tripprep_v1';
 
 /* ================= 유틸 ================= */
@@ -546,7 +547,13 @@ function mergeMarket(t){
     if(!map.has(key))map.set(key,{key,n:x.n,u:x.u||'',c:x.c||'기타',q:0,from:[],manual:true});
     const e=map.get(key); e.q+=Number(x.q)||0; e.manual=true;
   });
-  return [...map.values()];
+  // 사용자가 직접 고친 값 덮어쓰기 · 뺀 항목 제외
+  const ov=t.overrides||{}, ex=new Set(t.excluded||[]);
+  return [...map.values()].filter(i=>!ex.has(i.key)).map(i=>{
+    const o=ov[i.key];
+    if(o){ if(o.q!=null)i.q=o.q; if(o.u)i.u=o.u; if(o.c)i.c=o.c; i.edited=true; }
+    return i;
+  });
 }
 function hasCold(t){return mergeMarket(t).some(i=>COLD[i.c]);}
 
@@ -764,14 +771,16 @@ function viewMarket(t){
       const on=bought.has(i.key), multi=i.from.length>1;
       const isNew=multi&&!lastMerged.has(i.key);
       const q=Number.isInteger(i.q)?i.q:Number(i.q.toFixed(2));
-      const srcTxt=i.manual&&!i.from.length?'직접 추가':i.from.join(' · ');
+      let srcTxt=i.manual&&!i.from.length?'직접 추가':i.from.join(' · ');
+      if(i.edited)srcTxt=(srcTxt?srcTxt+' · ':'')+'직접 수정함';
       const showSrc=multi||(srcTxt&&srcTxt!==i.n);
       return `<div class="row ${on?'done':''} ${isNew?'flash':''}">
         <button class="cb ${on?'on':''}" data-buy="${esc(i.key)}">${CHECK}</button>
-        <div class="grow" data-buy="${esc(i.key)}"><div class="txt">${esc(i.n)}</div>
-          ${showSrc?`<div class="tiny ${multi?'src':''}">${multi?'합산 · ':''}${esc(srcTxt)}</div>`:''}</div>
+        <button class="grow tap" data-editbuy="${esc(i.key)}"><div class="txt">${esc(i.n)}</div>
+          ${showSrc?`<div class="tiny ${multi?'src':''}">${multi?'합산 · ':''}${esc(srcTxt)}</div>`:''}</button>
         ${COLD[cat]?'<span class="pill-tag tag-cold">콜드</span>':''}
         <div class="qty">${q}${esc(i.u)}</div>
+        <button class="del-x" data-delbuy="${esc(i.key)}">${XICO}</button>
       </div>`;
     }).join('');
     const cnt=items.filter(i=>i.c===cat).length;
@@ -812,10 +821,44 @@ function viewMarket(t){
 }
 
 /* ================= 시트 ================= */
-function openSheet(html){$('#sheet').innerHTML='<div class="sh-handle"></div>'+html;
-  $('#sheet').classList.add('on');$('#dim').classList.add('on');}
-function closeSheet(){$('#sheet').classList.remove('on');$('#dim').classList.remove('on');}
+function openSheet(html){
+  const sh=$('#sheet');
+  sh.innerHTML='<div class="sh-handle"></div>'+html;
+  sh.classList.add('on');$('#dim').classList.add('on');
+  // 엔터로 기본 버튼 실행 (자동완성이 열려 있으면 첫 후보 선택)
+  const primary=sh.querySelector('.btn:not(.ghost)');
+  sh.querySelectorAll('input.inp').forEach(inp=>{
+    if(inp.type==='date'||inp.type==='time')return;
+    inp.addEventListener('keydown',e=>{
+      if(e.key!=='Enter')return;
+      e.preventDefault();
+      const pick=sh.querySelector('.sug.on .sug-row');
+      if(pick){pick.click();return;}
+      if(primary)primary.click();
+    });
+  });
+  requestAnimationFrame(fitSheetToKeyboard);
+}
+function closeSheet(){
+  const sh=$('#sheet');
+  sh.classList.remove('on');$('#dim').classList.remove('on');
+  sh.style.bottom='';sh.style.maxHeight='';
+}
 $('#dim').onclick=closeSheet;
+
+// 모바일 키보드가 올라와도 시트 버튼이 가려지지 않게
+function fitSheetToKeyboard(){
+  const vv=window.visualViewport, sh=$('#sheet');
+  if(!vv)return;
+  if(!sh.classList.contains('on')){sh.style.bottom='';sh.style.maxHeight='';return;}
+  const kb=Math.max(0,window.innerHeight-vv.height-vv.offsetTop);
+  sh.style.bottom=kb+'px';
+  sh.style.maxHeight=Math.max(240,vv.height-24)+'px';
+}
+if(window.visualViewport){
+  window.visualViewport.addEventListener('resize',fitSheetToKeyboard);
+  window.visualViewport.addEventListener('scroll',fitSheetToKeyboard);
+}
 
 function sheetTrips(){
   const rows=DB.trips.slice().sort((a,b)=>String(b.dateStart).localeCompare(String(a.dateStart)))
@@ -1071,9 +1114,58 @@ function sheetAddExtra(){
     const qu=$('#e-qty').value.trim()||'1개';
     const mm=qu.match(/^([\d.]+)\s*(.*)$/);
     const q=mm?parseFloat(mm[1]):1, u=mm?(mm[2]||'개'):qu;
-    curTrip().extras.push({n,q:isNaN(q)?1:q,u,c:sel});
+    const t=curTrip();
+    t.extras.push({n,q:isNaN(q)?1:q,u,c:sel});
+    t.excluded=(t.excluded||[]).filter(k=>k!==n+'|'+u);   // 뺐던 항목을 다시 넣으면 복구
     UI.seg='list'; save();closeSheet();render();toast('추가했습니다');
   };
+}
+
+/* 장보기 항목 편집 — 탭하면 올라오는 시트 */
+function sheetEditBuy(key){
+  const t=curTrip();
+  const item=mergeMarket(t).find(i=>i.key===key);
+  if(!item){closeSheet();return;}
+  const src=item.manual&&!item.from.length?'직접 추가한 항목':`${item.from.join(' · ')} 에서 옴`;
+  const q=Number.isInteger(item.q)?item.q:Number(item.q.toFixed(2));
+  openSheet(`
+    <div class="sh-hd"><div class="sh-title">${esc(item.n)}</div>
+      <button class="icon-btn" onclick="closeSheet()">${XICO}</button></div>
+    <div class="sh-body">
+      <div class="hint" style="margin-top:0">${esc(src)}</div>
+      <div class="fld"><div class="fld-lab">수량</div>
+        <input class="inp" id="b-qty" value="${esc(q+item.u)}"></div>
+      <div class="fld"><div class="fld-lab">분류</div>
+        <div class="chips" id="b-cat">${MKT_CATS.map(c=>
+          `<button class="chip ${c===item.c?'on':''}" data-c="${esc(c)}">${MKT_IC[c]} ${c}</button>`).join('')}</div></div>
+      <button class="btn" id="b-save">저장</button>
+      <button class="btn ghost" id="b-del">이 항목 삭제</button>
+    </div>`);
+  let sel=item.c;
+  $('#b-cat').onclick=ev=>{const b=ev.target.closest('[data-c]');if(!b)return;
+    sel=b.dataset.c;$('#b-cat').querySelectorAll('.chip').forEach(c=>c.classList.toggle('on',c===b));};
+  $('#b-save').onclick=()=>{
+    const raw=$('#b-qty').value.trim()||'1개';
+    const m=raw.match(/^([\d.]+)\s*(.*)$/);
+    t.overrides=t.overrides||{};
+    t.overrides[key]={q:m?parseFloat(m[1]):1,u:m?(m[2]||'개'):raw,c:sel};
+    save();closeSheet();render();toast('저장했습니다');
+  };
+  $('#b-del').onclick=()=>{closeSheet();deleteBuyItem(key);};
+}
+
+// 레시피에서 온 항목은 '제외 목록'으로, 직접 추가한 항목은 실제 삭제
+function deleteBuyItem(key){
+  const t=curTrip();
+  const before={extras:(t.extras||[]).slice(),excluded:(t.excluded||[]).slice()};
+  const name=(mergeMarket(t).find(i=>i.key===key)||{}).n||'항목';
+  t.extras=(t.extras||[]).filter(x=>x.n+'|'+(x.u||'')!==key);
+  t.excluded=t.excluded||[];
+  if(!t.excluded.includes(key))t.excluded.push(key);
+  save();render();
+  toast(`'${name}' 뺐습니다`,'되돌리기',()=>{
+    t.extras=before.extras;t.excluded=before.excluded;save();render();
+  });
 }
 
 function sheetAddPlan(){
@@ -1324,6 +1416,11 @@ document.addEventListener('click',ev=>{
   const om=T.closest('[data-openmenu]');
   if(om){sheetMenuEdit(om.dataset.openmenu);return;}
   if(T.closest('#btnAddMenu')){sheetMenuEdit(null);return;}
+
+  const eb=T.closest('[data-editbuy]');
+  if(eb){sheetEditBuy(eb.dataset.editbuy);return;}
+  const db=T.closest('[data-delbuy]');
+  if(db){deleteBuyItem(db.dataset.delbuy);return;}
 
   const by=T.closest('[data-buy]');
   if(by){
