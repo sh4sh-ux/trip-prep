@@ -61,6 +61,13 @@ svg{display:block;flex-shrink:0;}
 .acc-body .row::after{left:20px;}
 .grow{flex:1;min-width:0;}
 button.tap{text-align:left;background:transparent;border:none;padding:0;font:inherit;color:inherit;}
+.step{display:flex;align-items:center;border:1px solid var(--sep2);border-radius:var(--rs);
+  overflow:hidden;width:160px;}
+.step-b{width:48px;height:46px;font-size:21px;font-weight:600;color:var(--label2);background:var(--fill2);}
+.step-b:active{background:var(--sep);}
+.step-i{flex:1;min-width:0;text-align:center;border:none;outline:none;height:46px;
+  font-size:17px;font-weight:700;background:var(--card);color:var(--label);appearance:textfield;}
+.step-i::-webkit-outer-spin-button,.step-i::-webkit-inner-spin-button{appearance:none;margin:0;}
 .txt{font-size:14px;line-height:1.35;word-break:break-word;}
 .tiny{font-size:11.5px;color:var(--label3);margin-top:2px;line-height:1.35;}
 .pill-tag{font-size:10.5px;font-weight:600;padding:2px 7px;border-radius:5px;flex-shrink:0;}
@@ -231,7 +238,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;
 
 <script>
 'use strict';
-const VERSION='v0.5', BUILD_TIME='2026-08-05 19:20';
+const VERSION='v0.6', BUILD_TIME='2026-08-05 19:50';
 const KEY='tripprep_v1';
 
 /* ================= 유틸 ================= */
@@ -509,6 +516,10 @@ function save(){try{localStorage.setItem(KEY,JSON.stringify(DB));dbxScheduleSync
   catch(e){toast('저장 공간이 부족합니다');}}
 function curTrip(){return DB.trips.find(t=>t.id===DB.cur)||null;}
 
+// 준비물 수량: '×3' ↔ 3 (1이면 표시하지 않음)
+const qtyNum=s=>{const m=String(s==null?'':s).match(/(\d+)/);return m?Math.max(1,parseInt(m[1],10)):1;};
+const qtyStr=n=>n>1?'×'+n:'';
+
 function nightsOf(t){return Math.max(0,diffDays(t.dateStart,t.dateEnd));}
 function daysOf(t){return nightsOf(t)+1;}
 
@@ -728,9 +739,8 @@ function viewPack(t){
       <div class="acc-body">
         ${items.map(p=>`<div class="row ${p.done?'done':''}">
           <button class="cb ${p.done?'on':''}" data-pack="${p.id}">${CHECK}</button>
-          <div class="grow" data-pack="${p.id}"><div class="txt">${esc(p.name)}</div>
-            ${p.auto?`<div class="tiny">${esc(p.auto)} 기준 자동</div>`:''}</div>
-          ${p.qty?`<div class="qty">${esc(p.qty)}</div>`:''}
+          <button class="grow tap" data-editpack="${p.id}"><div class="txt">${esc(p.name)}</div></button>
+          ${qtyNum(p.qty)>1?`<div class="qty">×${qtyNum(p.qty)}</div>`:''}
           <button class="del-x" data-delpack="${p.id}">${XICO}</button>
         </div>`).join('')}
         <button class="addbtn" data-addpack="${esc(c.cat)}"><span class="plus">+</span> 항목 추가</button>
@@ -1064,29 +1074,53 @@ function parseIng(text){
   }).filter(Boolean);
 }
 
-function sheetAddPack(cat){
+/* 준비물 추가 / 편집 — id 를 주면 편집, cat 만 주면 추가 */
+function sheetPack(cat,id){
+  const t=curTrip();
+  const p=id?t.pack.find(x=>x.id===id):null;
+  const start=p?p.cat:cat;
   openSheet(`
-    <div class="sh-hd"><div class="sh-title">준비물 추가</div>
+    <div class="sh-hd"><div class="sh-title">${p?'준비물 수정':'준비물 추가'}</div>
       <button class="icon-btn" onclick="closeSheet()">${XICO}</button></div>
     <div class="sh-body">
       <div class="fld"><div class="fld-lab">항목</div>
-        <input class="inp" id="a-name" placeholder="예: 카메라 배터리"></div>
-      <div class="fld"><div class="fld-lab">수량 (선택)</div>
-        <input class="inp" id="a-qty" placeholder="예: ×2"></div>
+        <input class="inp" id="a-name" placeholder="예: 카메라 배터리" value="${esc(p?p.name:'')}"></div>
+      <div class="fld"><div class="fld-lab">수량</div>
+        <div class="step">
+          <button class="step-b" data-step="-1">−</button>
+          <input class="step-i" id="a-qty" type="number" min="1" max="99"
+            value="${p?qtyNum(p.qty):1}">
+          <button class="step-b" data-step="1">+</button>
+        </div></div>
       <div class="fld"><div class="fld-lab">분류</div>
         <div class="chips" id="a-cat">${PACK_CATS.map(c=>
-          `<button class="chip ${c.cat===cat?'on':''}" data-c="${esc(c.cat)}">${c.ic} ${c.cat}</button>`).join('')}</div></div>
-      <button class="btn" id="a-save">추가</button>
+          `<button class="chip ${c.cat===start?'on':''}" data-c="${esc(c.cat)}">${c.ic} ${c.cat}</button>`).join('')}</div></div>
+      <button class="btn" id="a-save">${p?'저장':'추가'}</button>
+      ${p?`<button class="btn ghost" id="a-del">이 항목 삭제</button>`:''}
     </div>`);
-  let sel=cat;
+  let sel=start;
   $('#a-cat').onclick=ev=>{const b=ev.target.closest('[data-c]');if(!b)return;
     sel=b.dataset.c;$('#a-cat').querySelectorAll('.chip').forEach(c=>c.classList.toggle('on',c===b));};
-  $('#a-name').focus();
+  $('.step').onclick=ev=>{
+    const b=ev.target.closest('[data-step]'); if(!b)return;
+    const i=$('#a-qty');
+    i.value=Math.min(99,Math.max(1,(parseInt(i.value,10)||1)+Number(b.dataset.step)));
+  };
+  if(!p)$('#a-name').focus();
   $('#a-save').onclick=()=>{
     const name=$('#a-name').value.trim();
     if(!name){toast('항목을 입력해 주세요');return;}
-    curTrip().pack.push({id:uid(),cat:sel,name,qty:$('#a-qty').value.trim(),auto:'',done:false});
-    UI.openCats[sel]=true; save();closeSheet();render();toast('추가했습니다');
+    const qty=qtyStr(Math.max(1,parseInt($('#a-qty').value,10)||1));
+    if(p){Object.assign(p,{name,qty,cat:sel});}
+    else{t.pack.push({id:uid(),cat:sel,name,qty,auto:'',done:false});}
+    UI.openCats[sel]=true; save();closeSheet();render();toast(p?'저장했습니다':'추가했습니다');
+  };
+  if(p)$('#a-del').onclick=()=>{
+    closeSheet();
+    const idx=t.pack.findIndex(x=>x.id===p.id);
+    const removed=t.pack.splice(idx,1)[0];
+    save();render();
+    toast(`'${removed.name}' 삭제`,'되돌리기',()=>{t.pack.splice(idx,0,removed);save();render();});
   };
 }
 
@@ -1433,7 +1467,9 @@ document.addEventListener('click',ev=>{
   }
 
   const ap=T.closest('[data-addpack]');
-  if(ap){sheetAddPack(ap.dataset.addpack);return;}
+  if(ap){sheetPack(ap.dataset.addpack,null);return;}
+  const ep=T.closest('[data-editpack]');
+  if(ep){sheetPack(null,ep.dataset.editpack);return;}
   if(T.closest('#btnAddExtra')){sheetAddExtra();return;}
   if(T.closest('#btnAddPlan')){sheetAddPlan();return;}
 
