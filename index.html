@@ -238,7 +238,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;
 
 <script>
 'use strict';
-const VERSION='v0.6', BUILD_TIME='2026-08-05 19:50';
+const VERSION='v0.7', BUILD_TIME='2026-08-05 20:20';
 const KEY='tripprep_v1';
 
 /* ================= 유틸 ================= */
@@ -1136,11 +1136,21 @@ function sheetAddExtra(){
       <div class="fld"><div class="fld-lab">분류</div>
         <div class="chips" id="e-cat">${MKT_CATS.map(c=>
           `<button class="chip ${c==='기타'?'on':''}" data-c="${esc(c)}">${MKT_IC[c]} ${c}</button>`).join('')}</div></div>
+      <div class="fld"><div class="fld-lab">어느 메뉴의 재료인가요</div>
+        <div class="chips" id="e-menu">
+          <button class="chip on" data-m="">메뉴 없음</button>
+          ${(curTrip().menus||[]).map(m=>
+            `<button class="chip" data-m="${m.id}">${esc(m.emoji||'🍽')} ${esc(m.name)}</button>`).join('')}
+        </div></div>
+      <div class="hint">메뉴를 고르면 그 메뉴의 재료로 들어가서, 메뉴를 뺄 때 같이 빠지고
+        내 사전에 저장돼 다음 여행에서도 따라옵니다.</div>
       <button class="btn" id="e-save">추가</button>
     </div>`);
-  let sel='기타';
+  let sel='기타', menuId='';
   $('#e-cat').onclick=ev=>{const b=ev.target.closest('[data-c]');if(!b)return;
     sel=b.dataset.c;$('#e-cat').querySelectorAll('.chip').forEach(c=>c.classList.toggle('on',c===b));};
+  $('#e-menu').onclick=ev=>{const b=ev.target.closest('[data-m]');if(!b)return;
+    menuId=b.dataset.m;$('#e-menu').querySelectorAll('.chip').forEach(c=>c.classList.toggle('on',c===b));};
   $('#e-name').focus();
   $('#e-save').onclick=()=>{
     const n=$('#e-name').value.trim();
@@ -1149,9 +1159,16 @@ function sheetAddExtra(){
     const mm=qu.match(/^([\d.]+)\s*(.*)$/);
     const q=mm?parseFloat(mm[1]):1, u=mm?(mm[2]||'개'):qu;
     const t=curTrip();
-    t.extras.push({n,q:isNaN(q)?1:q,u,c:sel});
+    const m=menuId?t.menus.find(x=>x.id===menuId):null;
+    if(m){
+      m.ing=m.ing||[]; m.ing.push({n,q:isNaN(q)?1:q,u,c:sel}); m.picked=true;
+      saveToLibrary(m.name,m.emoji,m.ing,t.people||1);
+    }else{
+      t.extras.push({n,q:isNaN(q)?1:q,u,c:sel});
+    }
     t.excluded=(t.excluded||[]).filter(k=>k!==n+'|'+u);   // 뺐던 항목을 다시 넣으면 복구
-    UI.seg='list'; save();closeSheet();render();toast('추가했습니다');
+    UI.seg='list'; save();closeSheet();render();
+    toast(m?`${m.name} 재료로 추가했습니다`:'추가했습니다');
   };
 }
 
@@ -1172,9 +1189,26 @@ function sheetEditBuy(key){
       <div class="fld"><div class="fld-lab">분류</div>
         <div class="chips" id="b-cat">${MKT_CATS.map(c=>
           `<button class="chip ${c===item.c?'on':''}" data-c="${esc(c)}">${MKT_IC[c]} ${c}</button>`).join('')}</div></div>
+      ${item.manual&&!item.from.length?`
+      <div class="fld"><div class="fld-lab">메뉴 재료로 옮기기</div>
+        <div class="chips" id="b-menu">${(t.menus||[]).map(m=>
+          `<button class="chip" data-m="${m.id}">${esc(m.emoji||'🍽')} ${esc(m.name)}</button>`).join('')
+          ||'<div class="tiny">메뉴가 없습니다</div>'}</div></div>
+      <div class="hint">메뉴에 넣으면 그 메뉴를 뺄 때 같이 빠지고, 내 사전에 저장돼 다음 여행에서도 따라옵니다.</div>
+      `:''}
       <button class="btn" id="b-save">저장</button>
       <button class="btn ghost" id="b-del">이 항목 삭제</button>
     </div>`);
+  const menuBox=$('#b-menu');
+  if(menuBox)menuBox.onclick=ev=>{
+    const b=ev.target.closest('[data-m]'); if(!b)return;
+    const raw=$('#b-qty').value.trim(); const mm=raw.match(/^([\d.]+)\s*(.*)$/);
+    t.overrides=t.overrides||{};
+    t.overrides[key]={q:mm?parseFloat(mm[1]):1,u:mm?(mm[2]||'개'):raw,c:sel};  // 편집 중이던 값 반영
+    const moved=moveExtraToMenu(key,b.dataset.m);
+    save();closeSheet();render();
+    toast(moved?`'${item.n}' → ${moved.name} 재료로 옮겼습니다`:'옮기지 못했습니다');
+  };
   let sel=item.c;
   $('#b-cat').onclick=ev=>{const b=ev.target.closest('[data-c]');if(!b)return;
     sel=b.dataset.c;$('#b-cat').querySelectorAll('.chip').forEach(c=>c.classList.toggle('on',c===b));};
@@ -1186,6 +1220,22 @@ function sheetEditBuy(key){
     save();closeSheet();render();toast('저장했습니다');
   };
   $('#b-del').onclick=()=>{closeSheet();deleteBuyItem(key);};
+}
+
+// 직접 추가한 장보기 항목을 메뉴의 재료로 옮김
+function moveExtraToMenu(key,menuId){
+  const t=curTrip();
+  const idx=(t.extras||[]).findIndex(x=>x.n+'|'+(x.u||'')===key);
+  const m=t.menus.find(x=>x.id===menuId);
+  if(idx<0||!m)return null;
+  const [x]=t.extras.splice(idx,1);
+  const ov=(t.overrides||{})[key]||{};
+  m.ing=m.ing||[];
+  m.ing.push({n:x.n, q:ov.q!=null?ov.q:x.q, u:ov.u||x.u, c:ov.c||x.c});
+  m.picked=true;
+  if(t.overrides)delete t.overrides[key];
+  saveToLibrary(m.name,m.emoji,m.ing,t.people||1);   // 내 사전에도 반영
+  return m;
 }
 
 // 레시피에서 온 항목은 '제외 목록'으로, 직접 추가한 항목은 실제 삭제
