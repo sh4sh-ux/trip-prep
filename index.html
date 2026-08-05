@@ -234,6 +234,19 @@ textarea.inp{resize:vertical;min-height:92px;line-height:1.55;}
 .mrow.on .mrow-t{font-weight:700;color:var(--blue);}
 .sh-div{height:8px;background:var(--bg);}
 .hint{font-size:12px;color:var(--label3);line-height:1.55;margin:-6px 0 14px;}
+.lab-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;min-height:22px;}
+.lab-search{font-size:12px;font-weight:600;color:var(--blue-txt);display:inline-flex;align-items:center;
+  gap:4px;padding:4px 9px;border-radius:7px;background:var(--blue-bg);}
+.lab-search:active{opacity:.65;}
+/* 장소·주소 검색 오버레이 (Daum 우편번호) */
+.pc-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:130;display:flex;
+  align-items:center;justify-content:center;padding:16px;}
+.pc-box{width:100%;max-width:440px;height:72vh;max-height:580px;background:var(--card);
+  border-radius:var(--r);overflow:hidden;display:flex;flex-direction:column;box-shadow:0 14px 44px rgba(0,0,0,.32);}
+.pc-hd{display:flex;align-items:center;justify-content:space-between;padding:12px 8px 12px 16px;
+  border-bottom:1px solid var(--sep);}
+.pc-hd-t{font-size:15px;font-weight:700;letter-spacing:-.2px;}
+.pc-embed{flex:1;min-height:0;}
 .sug{margin-top:7px;border:1px solid var(--sep);border-radius:var(--rs);overflow:hidden auto;
   display:none;max-height:230px;background:var(--card);}
 .sug.on{display:block;}
@@ -277,7 +290,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;
 
 <script>
 'use strict';
-const VERSION='v0.9', BUILD_TIME='2026-08-05 21:30';
+const VERSION='v0.10', BUILD_TIME='2026-08-05 22:00';
 const KEY='tripprep_v1';
 
 /* ================= 유틸 ================= */
@@ -289,6 +302,7 @@ const CHEV='<svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="n
 const XICO='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
 const DOTS='<svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>';
 const CARET='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
+const PINICO='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>';
 const CLOCKICO='<svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>';
 const CALICO='<svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
 
@@ -903,6 +917,42 @@ function closeSheet(){
 }
 $('#dim').onclick=closeSheet;
 
+/* ---------- 장소·주소 검색 (차용증 앱과 동일한 Daum 우편번호) ---------- */
+let _daumP=null;
+function loadDaum(){
+  if(window.daum&&window.daum.Postcode)return Promise.resolve();
+  if(_daumP)return _daumP;
+  _daumP=new Promise((res,rej)=>{
+    const s=document.createElement('script');
+    s.src='https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js';
+    s.onload=res; s.onerror=()=>{_daumP=null;rej();};
+    document.head.appendChild(s);
+  });
+  return _daumP;
+}
+function openPlaceSearch(onPick){
+  loadDaum().then(()=>{
+    const ov=document.createElement('div');
+    ov.className='pc-overlay';
+    ov.innerHTML=`<div class="pc-box">
+      <div class="pc-hd"><div class="pc-hd-t">장소 · 주소 검색</div>
+        <button class="icon-btn" id="pc-x">${XICO}</button></div>
+      <div class="pc-embed" id="pc-embed"></div></div>`;
+    document.body.appendChild(ov);
+    const close=()=>ov.remove();
+    ov.querySelector('#pc-x').onclick=close;
+    ov.addEventListener('click',e=>{if(e.target===ov)close();});
+    new daum.Postcode({
+      oncomplete(d){
+        const name=(d.buildingName&&d.buildingName.trim())?d.buildingName:(d.roadAddress||d.address);
+        onPick({name,address:d.roadAddress||d.address});
+        close();
+      },
+      width:'100%',height:'100%'
+    }).embed(ov.querySelector('#pc-embed'));
+  }).catch(()=>toast('장소 검색을 불러오지 못했습니다 · 직접 입력해 주세요'));
+}
+
 /* ---------- 날짜·시간 피커 (시트 위에 겹치는 두 번째 레이어) ---------- */
 const PK_MINUTES=['00','10','15','20','30','40','45','50'];
 let PK=null;   // {date,time,min,max,withTime,onDone,cur:{y,m}}
@@ -1052,7 +1102,9 @@ function sheetTripForm(edit){
       <div class="row2">
         <div class="fld"><div class="fld-lab">인원</div>
           <input class="inp" type="number" id="f-people" min="1" max="30" value="${t?t.people:2}"></div>
-        <div class="fld"><div class="fld-lab">숙소 (선택)</div>
+        <div class="fld">
+          <div class="lab-row"><div class="fld-lab" style="margin:0">숙소 (선택)</div>
+            <span id="f-stay-search"></span></div>
           <input class="inp" id="f-stay" placeholder="애월 풀빌라" value="${esc(t?t.stay:'')}"></div>
       </div>
       <button class="btn" id="f-save">${edit?'저장':'만들기'}</button>
@@ -1060,8 +1112,17 @@ function sheetTripForm(edit){
     </div>`);
 
   let type=t?t.type:'domestic', ds=s, de=e;
+  // 해외가 아닐 때만 숙소 장소 검색 버튼 노출 (Daum 우편번호는 국내 전용)
+  const staySearch=()=>{
+    const box=$('#f-stay-search');
+    box.innerHTML = type==='overseas' ? '' : `<button class="lab-search" id="f-stay-btn">${PINICO} 장소 검색</button>`;
+    const b=$('#f-stay-btn');
+    if(b)b.onclick=()=>openPlaceSearch(r=>{$('#f-stay').value=r.name;});
+  };
+  staySearch();
   $('#f-type').onclick=ev=>{const b=ev.target.closest('[data-type]');if(!b)return;
-    type=b.dataset.type;$('#f-type').querySelectorAll('.chip').forEach(c=>c.classList.toggle('on',c===b));};
+    type=b.dataset.type;$('#f-type').querySelectorAll('.chip').forEach(c=>c.classList.toggle('on',c===b));
+    staySearch();};
   // 시작일에는 상한을 두지 않고, 기간(박수)을 유지한 채 종료일이 따라오게 함
   $('#f-start').onclick=()=>openPicker({title:'시작일',date:ds,onDone:d=>{
     const nights=Math.max(0,diffDays(ds,de));
@@ -1418,7 +1479,9 @@ function sheetAddPlan(){
         <button class="inp fld-btn" id="p-end"><span id="p-end-t" class="ph">없음</span>${CLOCKICO}</button></div>
       <div class="fld"><div class="fld-lab">일정</div>
         <input class="inp" id="p-title" placeholder="예: 마트 장보기"></div>
-      <div class="fld"><div class="fld-lab">장소 · 메모 (선택)</div>
+      <div class="fld">
+        <div class="lab-row"><div class="fld-lab" style="margin:0">장소 · 메모 (선택)</div>
+          ${t.type!=='overseas'?`<button class="lab-search" id="p-place">${PINICO} 장소 검색</button>`:''}</div>
         <input class="inp" id="p-note" placeholder="예: 이마트 서귀포점"></div>
       <button class="btn" id="p-save">추가</button>
     </div>`);
@@ -1431,6 +1494,8 @@ function sheetAddPlan(){
     title:'종료 시간', timeOnly:true, time:end||time, withTime:true,
     onDone:(d,tm)=>{end=tm;
       const el=$('#p-end-t'); el.textContent=end||'없음'; el.classList.toggle('ph',!end);}});
+  const plBtn=$('#p-place');
+  if(plBtn)plBtn.onclick=()=>openPlaceSearch(r=>{$('#p-note').value=r.name;});
   $('#p-save').onclick=()=>{
     const title=$('#p-title').value.trim();
     if(!title){toast('일정을 입력해 주세요');return;}
