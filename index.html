@@ -323,7 +323,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;
 
 <script>
 'use strict';
-const VERSION='v0.28', BUILD_TIME='2026-08-06 19:10';
+const VERSION='v0.29', BUILD_TIME='2026-08-06 19:40';
 const KEY='tripprep_v1';
 
 /* ================= 유틸 ================= */
@@ -613,6 +613,28 @@ function scaleIng(ing,people){
     q=DECIMAL_UNITS.test(i.u)?Math.round(q*100)/100:Math.ceil(q-1e-9);
     return {n:i.n,q:Math.max(q,DECIMAL_UNITS.test(i.u)?0.01:1),u:i.u,c:i.c};
   });
+}
+
+/* 재료 이름 → 분류·단위 사전 (내장 레시피 104종에서 학습, 가장 흔한 값).
+   재료 입력에서 이름만 써도 분류·단위를 자동으로 채우는 데 사용 */
+const ING_DICT=(()=>{
+  const acc={};
+  RECIPES.forEach(r=>parseRecipe(r[2]).forEach(i=>{
+    const a=acc[i.n]||(acc[i.n]={c:{},u:{}});
+    a.c[i.c]=(a.c[i.c]||0)+1; a.u[i.u]=(a.u[i.u]||0)+1;
+  }));
+  const top=o=>Object.keys(o).sort((x,y)=>o[y]-o[x])[0];
+  const d={}; Object.keys(acc).forEach(n=>{d[n]={c:top(acc[n].c),u:top(acc[n].u)};});
+  return d;
+})();
+// 이름으로 분류·단위 힌트: 내장 사전 우선, 없으면 내 사전(과거 입력)에서 학습
+function ingHint(n){
+  if(ING_DICT[n])return ING_DICT[n];
+  for(const r of (DB.library||[])){
+    const hit=(r.ing||[]).find(i=>i.n===n);
+    if(hit)return {c:MKT_CATS.includes(hit.c)?hit.c:'기타', u:hit.u||'개'};
+  }
+  return null;
 }
 
 /* ================= 데이터 ================= */
@@ -1561,10 +1583,11 @@ function sheetMenuEdit(menuId){
             `<button class="chip ${(m&&m.day===i)?'on':''}" data-day="${i}">Day ${i+1}</button>`).join('')}
         </div></div>
       <div class="fld"><div class="fld-lab">재료</div>
-        <textarea class="inp" id="m-ing" placeholder="당근, 2개, 채소&#10;대파, 1단, 채소">${esc(ingText)}</textarea></div>
+        <textarea class="inp" id="m-ing" placeholder="당근&#10;삼겹살 300g&#10;대파, 1단, 채소">${esc(ingText)}</textarea></div>
       <div class="hint">메뉴 이름을 입력하면 레시피 ${RECIPES.length}종에서 찾아 재료를 채워줍니다.
-        직접 적을 때는 한 줄에 하나씩 <b>이름, 수량단위, 분류</b> 순서로 쓰면 됩니다.
-        분류는 ${MKT_CATS.join(' / ')} 중 하나이고, 비워두면 '기타'가 됩니다.</div>
+        직접 적을 땐 한 줄에 하나씩 — <b>이름만 써도</b> 분류·단위를 자동으로 채웁니다 (당근 → 당근·1개·채소).
+        수량은 이름 뒤에 붙이면 되고(삼겹살 300g), 분류를 직접 정하려면 <b>이름, 수량단위, 분류</b>.
+        분류는 ${MKT_CATS.join(' / ')} 중 하나입니다.</div>
       <div class="fld"><div class="fld-lab">조리도구 (선택)</div>
         <input class="inp" id="m-gear" placeholder="예: 버너, 냄비, 집게" value="${esc(gearText)}"></div>
       <div class="hint">쉼표로 구분해 적습니다. 여기 적은 도구는 <b>준비물 › 조리도구</b>에 자동으로 챙겨지고,
@@ -1697,17 +1720,31 @@ function sheetMenuBundle(menuId){
 }
 
 // "당근, 2개, 채소" → {n:'당근',q:2,u:'개',c:'채소'}
+// 이름만 써도 됨. '이름' / '이름 300g' / '이름, 2개' / '이름, 2개, 채소' 모두 허용.
+// 분류·단위를 안 쓰면 사전(ingHint)에서 자동으로 채움.
 function parseIng(text){
   return String(text||'').split('\n').map(l=>l.trim()).filter(Boolean).map(line=>{
     const p=line.split(',').map(x=>x.trim());
-    const n=p[0]||'';
-    const qu=p[1]||'1개';
-    const mm=qu.match(/^([\d.]+)\s*(.*)$/);
-    const q=mm?parseFloat(mm[1]):1;
-    const u=mm?(mm[2]||'개'):(qu||'개');
-    let c=p[2]||'기타';
-    if(!MKT_CATS.includes(c))c='기타';
-    return n?{n,q:isNaN(q)?1:q,u,c}:null;
+    let n, qu='', c='';
+    if(p.length>=2){ n=p[0]; qu=p[1]; c=p[2]||''; }
+    else{
+      // 쉼표 없이 '이름 수량단위' — 이름 뒤 공백 다음이 숫자로 시작하면 수량으로 분리
+      const s=p[0]||'', mm=s.match(/^(.+?)\s+([\d.].*)$/);
+      if(mm){ n=mm[1].trim(); qu=mm[2].trim(); } else n=s;
+    }
+    if(!n)return null;
+    const hint=ingHint(n);
+    // 수량·단위
+    let q=1, u='';
+    if(qu){
+      const m2=qu.match(/^([\d.]+)\s*(.*)$/);
+      if(m2){ q=parseFloat(m2[1]); u=(m2[2]||'').trim(); } else u=qu;
+    }
+    if(isNaN(q))q=1;
+    if(!u)u=(hint&&hint.u)||'개';
+    // 분류: 직접 지정한 게 유효하면 그것, 아니면 사전, 그래도 없으면 기타
+    if(!MKT_CATS.includes(c))c=(hint&&hint.c)||'기타';
+    return {n,q,u,c};
   }).filter(Boolean);
 }
 
