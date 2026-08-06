@@ -330,7 +330,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;
 
 <script>
 'use strict';
-const VERSION='v0.34', BUILD_TIME='2026-08-06 15:30';
+const VERSION='v0.35', BUILD_TIME='2026-08-07 03:10';
 const KEY='tripprep_v1';
 
 /* ================= 유틸 ================= */
@@ -366,7 +366,7 @@ function toast(msg,actLabel,actFn){
 }
 
 /* ================= 템플릿 ================= */
-const TYPES=[{k:'domestic',n:'국내'},{k:'overseas',n:'해외'},{k:'camp',n:'캠핑·차박'},{k:'biz',n:'출장'}];
+const TYPES=[{k:'domestic',n:'국내'},{k:'overseas',n:'해외'},{k:'camp',n:'캠핑·차박'}];
 const PACK_CATS=[
   {cat:'신분·필수',ic:'🪪'},{cat:'세면도구 및 화장품',ic:'🧴'},{cat:'의류 및 악세사리',ic:'👕'},
   {cat:'수영용품',ic:'🏊'},{cat:'전자기기',ic:'🔌'},{cat:'건강·상비약',ic:'💊'},
@@ -383,7 +383,7 @@ const PACK_TPL=[
     {n:'신분증'},{n:'지갑'},{n:'카드 · 현금'},
     {n:'여권',only:['overseas']},{n:'항공권 · 이티켓',only:['overseas']},
     {n:'해외 유심 · 로밍',only:['overseas']},
-    {n:'자동차키',only:['domestic','camp','biz']},
+    {n:'자동차키',only:['domestic','camp']},
     {n:'숙소 예약 확인서'},{n:'렌터카 바우처',only:['domestic','overseas']}]},
   {cat:'세면도구 및 화장품',items:[
     {n:'세안폼'},{n:'칫솔',q:(n,p)=>`×${p}`,s:BY_PEOPLE},{n:'치약'},{n:'샴푸 · 린스'},
@@ -393,20 +393,20 @@ const PACK_TPL=[
     {n:'상의',q:n=>`×${n+1}`,s:BY_NIGHTS},{n:'하의',q:n=>`×${Math.max(1,Math.ceil((n+1)/2))}`,s:BY_NIGHTS},
     {n:'속옷',q:n=>`×${n+1}`,s:BY_NIGHTS},{n:'양말',q:n=>`×${n+1}`,s:BY_NIGHTS},
     {n:'잠옷'},{n:'겉옷'},{n:'슬리퍼'},{n:'모자',only:['camp','domestic']}]},
-  // 수영용품 — 출장에서는 카테고리째 표시되지 않음
+  // 수영용품 — 국내·해외·캠핑에서만 (only 배열로 유형 제한)
   {cat:'수영용품',items:[
     {n:'수영복',q:(n,p)=>`×${p}`,s:BY_PEOPLE},{n:'래시가드'},
     {n:'아쿠아슈즈'},{n:'물안경'},{n:'튜브'},{n:'에어펌프'},{n:'방수팩'}
   ].map(x=>({...x,only:['domestic','overseas','camp']}))},
   {cat:'전자기기',items:[
     {n:'휴대전화 충전기'},{n:'애플워치 충전기'},{n:'보조배터리'},{n:'이어폰'},
-    {n:'멀티탭'},{n:'차량 거치대',only:['domestic','camp','biz']},
-    {n:'변환 어댑터',only:['overseas']},{n:'노트북 · 충전기',only:['biz']}]},
+    {n:'멀티탭'},{n:'차량 거치대',only:['domestic','camp']},
+    {n:'변환 어댑터',only:['overseas']}]},
   {cat:'건강·상비약',items:[
     {n:'상비약'},{n:'밴드'},{n:'멀미약'},{n:'선크림'},{n:'안경 · 렌즈'},{n:'모기기피제',only:['camp']}]},
   {cat:'기타',items:[
     {n:'우산'},{n:'에코백'},{n:'지퍼백'},
-    {n:'랜턴',only:['camp']},{n:'돗자리',only:['camp']},{n:'명함',only:['biz']}]}
+    {n:'랜턴',only:['camp']},{n:'돗자리',only:['camp']}]}
 ];
 // 장보기에 콜드 항목이 생기면 자동으로 붙는 카테고리
 const ICEBOX_ITEMS=[{n:'아이스박스'},{n:'아이스팩',q:()=>'×3'},{n:'보냉백'}];
@@ -675,7 +675,9 @@ function saveToLibrary(name,emoji,ing,people,gear){
 // 이전 버전 데이터 보정: 카테고리 이름 변경, '박수/인원수' → 실제 값
 function migrate(db){
   if(!Array.isArray(db.library))db.library=[];   // 내 사전 (여행 간 재사용)
+  if(db.packTemplateType==='biz')db.packTemplateType='domestic';   // 출장 유형 폐지 → 국내
   (db.trips||[]).forEach(t=>{
+    if(t.type==='biz')t.type='domestic';   // 출장은 여행이 아니라 유형에서 제거
     const n=Math.max(0,diffDays(t.dateStart,t.dateEnd)), p=t.people||1;
     (t.pack||[]).forEach(it=>{
       if(CAT_RENAME[it.cat])it.cat=CAT_RENAME[it.cat];
