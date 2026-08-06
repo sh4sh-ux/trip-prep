@@ -206,10 +206,11 @@ button.tap{text-align:left;background:transparent;border:none;padding:0;font:inh
 .dchip.on{background:var(--label);border-color:var(--label);color:#fff;font-weight:600;}
 .dchip small{display:block;font-size:10.5px;opacity:.65;font-weight:400;margin-top:1px;}
 
-.ud{width:38px;height:34px;border:1px solid var(--sep2);border-radius:8px;background:var(--card);
-  color:var(--label2);font-size:13px;flex-shrink:0;margin-left:5px;}
-.ud:active{background:var(--fill);}
-.ud:disabled{color:#DCDCE0;border-color:var(--sep);}
+.drag-h{width:44px;height:36px;display:flex;align-items:center;justify-content:center;
+  color:var(--label3);flex-shrink:0;touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none;}
+.drag-h:active{color:var(--label);cursor:grabbing;}
+.dragging{opacity:.94;background:var(--card);box-shadow:0 6px 22px rgba(0,0,0,.16);
+  border-radius:10px;position:relative;z-index:6;}
 .pack-tpl{margin-top:14px;text-align:center;}
 .pack-tpl button{font-size:13px;font-weight:600;color:var(--blue-txt);padding:9px 14px;border-radius:9px;background:var(--blue-bg);width:100%;}
 .pack-tpl button:active{opacity:.7;}
@@ -321,7 +322,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;
 
 <script>
 'use strict';
-const VERSION='v0.21', BUILD_TIME='2026-08-06 15:00';
+const VERSION='v0.22', BUILD_TIME='2026-08-06 15:40';
 const KEY='tripprep_v1';
 
 /* ================= 유틸 ================= */
@@ -930,9 +931,7 @@ function orderedPackCats(){
          - (ib<0?PACK_CATS.findIndex(x=>x.cat===b.cat)+100:ib);
   });
 }
-const UPDOWN=(type,id,first,last)=>`
-  <button class="ud" data-${type}up="${esc(id)}" ${first?'disabled':''}>▲</button>
-  <button class="ud" data-${type}down="${esc(id)}" ${last?'disabled':''}>▼</button>`;
+const HANDLE='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/></svg>';
 
 function viewPack(t){
   const done=t.pack.filter(p=>p.done).length,all=t.pack.length;
@@ -945,18 +944,19 @@ function viewPack(t){
     const items=t.pack.filter(p=>p.cat===c.cat);
     const dn=items.filter(p=>p.done).length;
     const open=sort?true:!!UI.openCats[c.cat];   // 정렬 모드에선 전부 펼침
-    const hdTag=sort?'div':'button';   // button 안에 ▲▼ button 중첩 시 DOM이 깨짐
-    return `<div class="acc ${open?'open':''}">
+    const hdTag=sort?'div':'button';   // button 안에 다른 버튼 중첩 시 DOM이 깨짐
+    return `<div class="acc ${open?'open':''}" ${sort?`data-sortcat="${esc(c.cat)}"`:''}>
       <${hdTag} class="acc-hd" ${sort?'':`data-cat="${esc(c.cat)}"`}>
         <span class="acc-ic">${c.ic}</span>
         <span class="acc-name">${esc(c.cat)}</span>
-        ${sort?UPDOWN('cat',c.cat,ci===0,ci===cats.length-1)
+        ${sort?`<span class="drag-h" data-kind="cat">${HANDLE}</span>`
           :`<span class="acc-count ${dn===items.length?'full':''}">${dn}/${items.length}</span>${CHEV}`}
       </${hdTag}>
       <div class="acc-body">
-        ${items.map((p,pi)=>`<div class="row ${p.done?'done':''}">
+        ${items.map(p=>`<div class="row ${p.done?'done':''}" ${sort?`data-rowid="${p.id}" data-rowcat="${esc(p.cat)}"`:''}>
           ${sort?`<div class="grow"><div class="txt">${esc(p.name)}</div></div>
-            ${UPDOWN('item',p.id,pi===0,pi===items.length-1)}`
+            <span class="drag-h" data-kind="item">${HANDLE}</span>
+            <button class="del-x" data-delpack="${p.id}">${XICO}</button>`
           :`<button class="cb ${p.done?'on':''}" data-pack="${p.id}">${CHECK}</button>
           <button class="grow tap" data-editpack="${p.id}"><div class="txt">${esc(p.name)}</div></button>
           ${qtyNum(p.qty)>1?`<div class="qty">×${qtyNum(p.qty)}</div>`:''}
@@ -974,7 +974,7 @@ function viewPack(t){
   </div>
   ${sort?`<div class="banner b"><div class="bi">↕️</div><div>
     <div class="banner-t">순서 바꾸기</div>
-    <div class="banner-d">▲▼로 카테고리와 항목 순서를 바꿉니다. 카테고리 순서는 모든 여행에 적용됩니다.</div>
+    <div class="banner-d">≡ 를 누른 채 위아래로 끌어서 옮깁니다. 카테고리 순서는 모든 여행에 적용됩니다.</div>
   </div></div>`
   :`<div class="banner g"><div class="bi">✨</div><div>
     <div class="banner-t">${DB.packTemplate?'내 기본 준비물 사용 중':esc(typeName)+' · '+nightsOf(t)+'박'+daysOf(t)+'일 · '+t.people+'명 기준'}</div>
@@ -2119,29 +2119,6 @@ document.addEventListener('click',ev=>{
   }
 
   if(T.closest('#btnPackSort')){UI.packSort=!UI.packSort;render();return;}
-  const cu=T.closest('[data-catup]'), cd=T.closest('[data-catdown]');
-  if(cu||cd){
-    const cat=(cu||cd).dataset.catup||(cu||cd).dataset.catdown;
-    const order=orderedPackCats().map(c=>c.cat);
-    const i=order.indexOf(cat), j=cu?i-1:i+1;
-    if(j>=0&&j<order.length){[order[i],order[j]]=[order[j],order[i]];DB.catOrder=order;save();render();}
-    return;
-  }
-  const iu=T.closest('[data-itemup]'), idn=T.closest('[data-itemdown]');
-  if(iu||idn){
-    const t=curTrip(), id=(iu||idn).dataset.itemup||(iu||idn).dataset.itemdown;
-    const me=t.pack.find(p=>p.id===id); if(!me)return;
-    // 같은 카테고리 안에서 이웃과 자리 교환 (전체 배열 인덱스 기준)
-    const idxAll=t.pack.indexOf(me);
-    const sib=t.pack.map((p,ix)=>({p,ix})).filter(x=>x.p.cat===me.cat);
-    const pos=sib.findIndex(x=>x.p===me), tgt=iu?pos-1:pos+1;
-    if(tgt>=0&&tgt<sib.length){
-      const other=sib[tgt].ix;
-      [t.pack[idxAll],t.pack[other]]=[t.pack[other],t.pack[idxAll]];
-      save();render();
-    }
-    return;
-  }
   if(T.closest('#btnSavePackTpl')){
     const t=curTrip(); savePackTemplate(t); save();
     toast(`이 준비물(${DB.packTemplate.length}개)을 기본값으로 저장했습니다`);
@@ -2172,6 +2149,55 @@ document.addEventListener('click',ev=>{
     return;
   }
 });
+
+/* ---- 준비물 순서: ≡ 핸들을 누른 채 드래그 ---- */
+let DRG=null;
+document.addEventListener('pointerdown',e=>{
+  const h=e.target.closest('.drag-h'); if(!h)return;
+  const kind=h.dataset.kind;
+  const el=kind==='item'?h.closest('.row'):h.closest('.acc');
+  if(!el)return;
+  e.preventDefault();
+  DRG={kind,el,container:el.parentElement,moved:false};
+  el.classList.add('dragging');
+  try{h.setPointerCapture(e.pointerId);}catch(_){}
+});
+document.addEventListener('pointermove',e=>{
+  if(!DRG)return;
+  e.preventDefault();
+  const sel=DRG.kind==='item'?'[data-rowid]':'[data-sortcat]';
+  const sibs=[...DRG.container.children].filter(x=>x!==DRG.el&&x.matches(sel));
+  if(!sibs.length)return;
+  DRG.moved=true;
+  const y=e.clientY;
+  let placed=false;
+  for(const s of sibs){
+    const r=s.getBoundingClientRect();
+    if(y<r.top+r.height/2){DRG.container.insertBefore(DRG.el,s);placed=true;break;}
+  }
+  if(!placed)sibs[sibs.length-1].after(DRG.el);
+});
+function dragEnd(commit){
+  if(!DRG)return;
+  const {kind,el,container,moved}=DRG;
+  el.classList.remove('dragging'); DRG=null;
+  const t=curTrip(); if(!t)return;
+  if(!moved||!commit){render();return;}   // 이동 없거나 취소면 원상 복구
+  if(kind==='cat'){
+    DB.catOrder=[...container.querySelectorAll('[data-sortcat]')].map(x=>x.dataset.sortcat);
+  }else{
+    const cat=el.dataset.rowcat;
+    const ids=[...container.querySelectorAll('[data-rowid]')].map(x=>x.dataset.rowid);
+    const mine=ids.map(id=>t.pack.find(p=>p.id===id)).filter(Boolean);
+    const idxFirst=t.pack.findIndex(p=>p.cat===cat);
+    const rest=t.pack.filter(p=>p.cat!==cat);
+    rest.splice(Math.max(0,Math.min(idxFirst,rest.length)),0,...mine);
+    t.pack=rest;
+  }
+  save();render();
+}
+document.addEventListener('pointerup',()=>dragEnd(true));
+document.addEventListener('pointercancel',()=>dragEnd(false));
 
 // 메뉴 칩 길게 눌러 편집
 let pressT=null;
