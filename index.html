@@ -322,7 +322,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;
 
 <script>
 'use strict';
-const VERSION='v0.24', BUILD_TIME='2026-08-06 16:50';
+const VERSION='v0.25', BUILD_TIME='2026-08-06 17:30';
 const KEY='tripprep_v1';
 
 /* ================= 유틸 ================= */
@@ -2102,7 +2102,7 @@ function importJSON(){
         const d=JSON.parse(r.result);
         if(!d||!Array.isArray(d.trips))throw new Error('형식이 올바르지 않습니다');
         if(!confirm(`여행 ${d.trips.length}개를 불러옵니다.\n현재 데이터는 덮어씌워집니다. 계속할까요?`))return;
-        DB=d; if(!DB.cur||!curTrip())DB.cur=DB.trips.length?DB.trips[0].id:null;
+        DB=migrate(d); if(!DB.cur||!curTrip())DB.cur=DB.trips.length?DB.trips[0].id:null;
         save();closeSheet();render();toast('불러왔습니다');
       }catch(e){toast('불러오기 실패: '+e.message);}
     };
@@ -2175,6 +2175,7 @@ document.addEventListener('click',ev=>{
 
   const mn=T.closest('[data-menu]');
   if(mn){
+    if(menuLongPressed){menuLongPressed=false;return;}   // 길게 눌러 편집한 직후 click은 선택 토글 안 함
     const t=curTrip(),m=t.menus.find(x=>x.id===mn.dataset.menu);
     if(m){m.picked=!m.picked;save();render();}
     return;
@@ -2303,11 +2304,15 @@ document.addEventListener('pointerup',()=>dragEnd(true));
 document.addEventListener('pointercancel',()=>dragEnd(false));
 
 // 메뉴 칩 길게 눌러 편집
-let pressT=null;
+let pressT=null, menuLongPressed=false;
 document.addEventListener('pointerdown',ev=>{
   const c=ev.target.closest('.mchip[data-menu]');
   if(!c)return;
-  pressT=setTimeout(()=>{pressT=null;sheetMenuEdit(c.dataset.menu);},520);
+  pressT=setTimeout(()=>{
+    pressT=null; menuLongPressed=true;
+    setTimeout(()=>{menuLongPressed=false;},700);   // click이 안 오는 경우(터치) 대비 자동 해제
+    sheetMenuEdit(c.dataset.menu);
+  },520);
 });
 ['pointerup','pointercancel','pointermove'].forEach(e=>
   document.addEventListener(e,()=>{if(pressT){clearTimeout(pressT);pressT=null;}}));
