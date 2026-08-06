@@ -223,7 +223,7 @@ button.tap{text-align:left;background:transparent;border:none;padding:0;font:inh
 .pack-tpl button{font-size:13px;font-weight:600;color:var(--blue-txt);padding:9px 14px;border-radius:9px;background:var(--blue-bg);width:100%;}
 .pack-tpl button:active{opacity:.7;}
 .pack-tpl button.reset{margin-top:8px;color:var(--label2);background:var(--fill);font-weight:500;}
-.mkt-tools{display:flex;justify-content:flex-end;margin:-2px 2px 10px;}
+.mkt-tools{display:flex;justify-content:flex-end;gap:8px;margin:-2px 2px 10px;}
 .mkt-tools button{font-size:12.5px;font-weight:600;color:var(--label2);padding:6px 11px;border-radius:8px;background:var(--fill);}
 .mkt-tools button:active{background:var(--sep);}
 .empty{padding:34px 20px;text-align:center;color:var(--label3);font-size:13px;line-height:1.7;}
@@ -330,7 +330,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;
 
 <script>
 'use strict';
-const VERSION='v0.32', BUILD_TIME='2026-08-06 21:40';
+const VERSION='v0.33', BUILD_TIME='2026-08-06 22:20';
 const KEY='tripprep_v1';
 
 /* ================= 유틸 ================= */
@@ -646,7 +646,7 @@ function ingHint(n){
 
 /* ================= 데이터 ================= */
 // day:null → 첫 렌더에서 오늘 날짜에 해당하는 Day 로 자동 선택
-let DB=loadDB(), UI={tab:'today',day:null,seg:'menu',openCats:{},mktClosed:{},menuMoreOpen:false};
+let DB=loadDB(), UI={tab:'today',day:null,seg:'menu',openCats:{},mktClosed:{},menuMoreOpen:false,mktSort:false};
 
 function loadDB(){
   try{const r=JSON.parse(localStorage.getItem(KEY));
@@ -1039,6 +1039,17 @@ function viewPack(t){
 
 /* ---- 장보기 ---- */
 let lastMerged=new Set();
+// 매대(장보기 카테고리) 표시 순서: DB.mktOrder(전역 설정) 우선, 나머지는 기본 순서
+function orderedMktCats(){
+  const ord=DB.mktOrder||[];
+  return MKT_CATS.slice().sort((a,b)=>
+    (ord.indexOf(a)<0?MKT_CATS.indexOf(a)+100:ord.indexOf(a))
+   -(ord.indexOf(b)<0?MKT_CATS.indexOf(b)+100:ord.indexOf(b)));
+}
+// 장볼 것 항목 표시 순서: t.buyOrder(키 목록) 우선, 없으면 기본(합산) 순서 유지
+function buyRank(t){const ord=t.buyOrder||[];return (a,b)=>{
+  const ia=ord.indexOf(a.key), ib=ord.indexOf(b.key);
+  return (ia<0?1e9:ia)-(ib<0?1e9:ib);};}
 function viewMarket(t){
   const menus=t.menus||[];
   const items=mergeMarket(t), bought=new Set(t.bought||[]);
@@ -1077,9 +1088,14 @@ function viewMarket(t){
     menuListHtml=pickedMenus.map(menuRow).join('')+more;
   }
 
-  const cats=MKT_CATS.filter(c=>items.some(i=>i.c===c));
+  const sort=!!UI.mktSort;
+  const cats=orderedMktCats().filter(c=>items.some(i=>i.c===c));
   const allOpen=cats.every(c=>!UI.mktClosed[c]);
   const buildRow=(i,cat)=>{
+    if(sort)return `<div class="row" data-rowid="${esc(i.key)}" data-rowcat="${esc(cat)}">
+      <div class="grow"><div class="txt">${esc(i.n)}</div></div>
+      <span class="drag-h" data-kind="item">${HANDLE}</span>
+      <button class="del-x" data-delbuy="${esc(i.key)}">${XICO}</button></div>`;
     const on=bought.has(i.key), multi=i.from.length>1;
     const shared=i.staple&&multi;   // 공용 양념이 여러 메뉴에 걸침 → 합산이 아니라 '공용'
     const isNew=multi&&!lastMerged.has(i.key);
@@ -1097,19 +1113,28 @@ function viewMarket(t){
     </div>`;
   };
   const accs=cats.map(cat=>{
-    const catItems=items.filter(i=>i.c===cat);
+    const catItems=items.filter(i=>i.c===cat).sort(buyRank(t));
     const dn=catItems.filter(i=>bought.has(i.key)).length;
     const open=!UI.mktClosed[cat];
-    return `<div class="acc ${open?'open':''}">
-      <button class="acc-hd" data-mktcat="${esc(cat)}">
+    const hdTag=sort?'div':'button';   // button 안에 다른 버튼 중첩 방지
+    return `<div class="acc ${open?'open':''}" ${sort?`data-sortcat="${esc(cat)}"`:''}>
+      <${hdTag} class="acc-hd" data-mktcat="${esc(cat)}">
         <span class="acc-ic">${MKT_IC[cat]}</span>
         <span class="acc-name">${esc(cat)}</span>
-        <span class="acc-count ${dn===catItems.length?'full':''}">${dn}/${catItems.length}</span>
-        ${CHEV}</button>
+        ${sort?`<span class="acc-count">${catItems.length}</span>${CHEV}
+            <span class="drag-h" data-kind="cat">${HANDLE}</span>`
+          :`<span class="acc-count ${dn===catItems.length?'full':''}">${dn}/${catItems.length}</span>${CHEV}`}
+      </${hdTag}>
       <div class="acc-body">${catItems.map(i=>buildRow(i,cat)).join('')}</div></div>`;
   }).join('');
   const listHtml=all?`
-    <div class="mkt-tools"><button id="mktToggleAll">${allOpen?'전체 접기':'전체 펼치기'}</button></div>
+    ${sort?`<div class="banner b"><div class="bi">↕️</div><div>
+      <div class="banner-t">순서 바꾸기</div>
+      <div class="banner-d">≡ 를 누른 채 끌면 매대가 따라 움직입니다. 매대를 탭해 열면 안의 재료도 옮길 수 있습니다.</div>
+    </div></div>`:''}
+    <div class="mkt-tools">
+      ${sort?'':`<button id="mktToggleAll">${allOpen?'전체 접기':'전체 펼치기'}</button>`}
+      <button id="btnMktSort">${sort?'✓ 순서 편집 완료':'↕ 순서 바꾸기'}</button></div>
     <div class="sec">${accs}</div>`
   :`<div class="sec"><div class="empty">고른 메뉴가 없습니다.<br>‘메뉴 고르기’에서 먼저 선택해 주세요.</div></div>`;
 
@@ -1141,8 +1166,8 @@ function viewMarket(t){
       <div class="bar"><i class="${all&&pct===100?'full':''}" style="width:${pct}%"></i></div>
     </div>
     ${listHtml}
-    <button class="addbtn" id="btnAddExtra" style="background:var(--card);border-radius:var(--r)">
-      <span class="plus">+</span> 직접 항목 추가</button>
+    ${sort?'':`<button class="addbtn" id="btnAddExtra" style="background:var(--card);border-radius:var(--r)">
+      <span class="plus">+</span> 직접 항목 추가</button>`}
   </div>`;
 }
 
@@ -2463,6 +2488,11 @@ document.addEventListener('click',ev=>{
     if(UI.packSort)UI.openCats={};   // 정렬 모드 진입 시 전부 접어 카테고리 이동을 쉽게
     render();return;
   }
+  if(T.closest('#btnMktSort')){
+    UI.mktSort=!UI.mktSort;
+    if(UI.mktSort)MKT_CATS.forEach(c=>{UI.mktClosed[c]=true;});   // 진입 시 매대 전부 접어 이동 쉽게
+    render();return;
+  }
   if(T.closest('#btnSavePackTpl')){
     const t=curTrip(); savePackTemplate(t); save();
     toast(`이 준비물(${DB.packTemplate.length}개)을 기본값으로 저장했습니다`);
@@ -2543,8 +2573,14 @@ function dragEnd(commit){
   if(moved)dragJustEnded=true;   // 드래그 직후 발생하는 click이 헤더를 토글하지 않게
   const t=curTrip(); if(!t)return;
   if(!moved||!commit){render();return;}   // 이동 없거나 취소면 원상 복구
+  const mkt=UI.tab==='market';
   if(kind==='cat'){
-    DB.catOrder=[...container.querySelectorAll('[data-sortcat]')].map(x=>x.dataset.sortcat);
+    const order=[...container.querySelectorAll('[data-sortcat]')].map(x=>x.dataset.sortcat);
+    if(mkt)DB.mktOrder=order; else DB.catOrder=order;
+  }else if(mkt){
+    // 장볼 것: 전체 화면의 현재 표시 순서로 buyOrder 재구성 (없어진 항목은 자동 정리)
+    const secEl=el.closest('.sec');
+    t.buyOrder=[...secEl.querySelectorAll('[data-rowid]')].map(x=>x.dataset.rowid);
   }else{
     const cat=el.dataset.rowcat;
     const ids=[...container.querySelectorAll('[data-rowid]')].map(x=>x.dataset.rowid);
