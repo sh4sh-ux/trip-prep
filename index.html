@@ -322,7 +322,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;
 
 <script>
 'use strict';
-const VERSION='v0.22', BUILD_TIME='2026-08-06 15:40';
+const VERSION='v0.23', BUILD_TIME='2026-08-06 16:10';
 const KEY='tripprep_v1';
 
 /* ================= 유틸 ================= */
@@ -1400,6 +1400,84 @@ function sheetTripForm(edit,tripId){
   };
 }
 
+/* 내 기본 준비물 관리 — 여행과 무관하게 기본 목록을 직접 편집 */
+function sheetPackTemplate(){
+  const tplType=DB.packTemplateType||'domestic';
+  let items;
+  if(Array.isArray(DB.packTemplate)&&DB.packTemplate.length){
+    items=DB.packTemplate.map(x=>({...x}));
+  }else{
+    // 아직 템플릿이 없으면 앱 기본(국내)에서 시작
+    items=[];
+    PACK_TPL.forEach(g=>g.items.forEach(it=>{
+      if(it.only&&!it.only.includes(tplType))return;
+      items.push({cat:g.cat,name:it.n});
+    }));
+  }
+  let sel=null;
+  const draw=()=>{
+    const sc=$('#sheet').scrollTop;
+    const cats=orderedPackCats().filter(c=>c.cat!=='아이스박스'&&c.cat!=='조리도구');
+    if(sel==null)sel=cats[0].cat;
+    const secs=cats.map(c=>{
+      const list=items.filter(x=>x.cat===c.cat);
+      return `<div class="sec" style="margin:0 20px 10px;border:1px solid var(--sep)">
+        <div class="sec-hd"><div class="sec-title">${c.ic} ${esc(c.cat)}</div>
+          <div class="sec-note">${list.length}개</div></div>
+        ${list.map(x=>`<div class="row">
+          <div class="grow"><div class="txt">${esc(x.name)}</div></div>
+          <button class="del-x" data-tdel="${esc(c.cat)}|${esc(x.name)}">${XICO}</button>
+        </div>`).join('')||'<div class="empty" style="padding:14px">항목 없음</div>'}
+      </div>`;
+    }).join('');
+    openSheet(`
+      <div class="sh-hd"><div class="sh-title">내 기본 준비물</div>
+        <button class="icon-btn" onclick="closeSheet()">${XICO}</button></div>
+      <div class="hint" style="margin:0 20px 12px">새 여행을 만들 때 이 목록으로 준비물이 생성됩니다.
+        상의·칫솔 등 수량은 여행마다 자동 계산되고, 여권 같은 유형 전용 항목은 여행 유형에 따라 자동으로 붙거나 빠집니다.</div>
+      ${secs}
+      <div class="sh-body" style="padding-top:6px">
+        <div class="fld"><div class="fld-lab">항목 추가</div>
+          <input class="inp" id="tp-name" placeholder="예: 카메라 배터리"></div>
+        <div class="fld"><div class="fld-lab">분류</div>
+          <div class="chips" id="tp-cat">${cats.map(c=>
+            `<button class="chip ${c.cat===sel?'on':''}" data-c="${esc(c.cat)}">${c.ic} ${c.cat}</button>`).join('')}</div></div>
+        <button class="btn ghost" id="tp-add" style="color:var(--label);margin-top:0">＋ 목록에 추가</button>
+        <button class="btn" id="tp-save">이 목록을 기본값으로 저장</button>
+        ${DB.packTemplate?`<button class="btn ghost" id="tp-reset">기본값 삭제 (앱 기본 사용)</button>`:''}
+      </div>`);
+    $('#sheet').scrollTop=sc;
+    $('#tp-cat').onclick=ev=>{const b=ev.target.closest('[data-c]');if(!b)return;
+      sel=b.dataset.c;$('#tp-cat').querySelectorAll('.chip').forEach(c=>c.classList.toggle('on',c===b));};
+    $('#sheet').querySelectorAll('[data-tdel]').forEach(b=>b.onclick=()=>{
+      const v=b.dataset.tdel, i=v.indexOf('|');
+      const cat=v.slice(0,i), name=v.slice(i+1);
+      const ix=items.findIndex(x=>x.cat===cat&&x.name===name);
+      if(ix>=0){items.splice(ix,1);draw();}
+    });
+    $('#tp-add').onclick=()=>{
+      const n=$('#tp-name').value.trim();
+      if(!n){toast('항목을 입력해 주세요');return;}
+      if(items.some(x=>x.name===n&&x.cat===sel)){toast('이미 있는 항목입니다');return;}
+      items.push({cat:sel,name:n});
+      draw();
+    };
+    $('#tp-save').onclick=()=>{
+      DB.packTemplate=items.map(x=>({...x}));
+      DB.packTemplateType=tplType;
+      save();closeSheet();render();
+      toast(`내 기본 준비물을 저장했습니다 (${items.length}개)`);
+    };
+    const rst=$('#tp-reset');
+    if(rst)rst.onclick=()=>{
+      if(!confirm('내 기본 준비물을 지우고 앱 기본으로 되돌릴까요?\n(이미 만든 여행은 그대로입니다)'))return;
+      delete DB.packTemplate; delete DB.packTemplateType;
+      save();closeSheet();render();toast('앱 기본으로 되돌렸습니다');
+    };
+  };
+  draw();
+}
+
 function sheetDataMenu(){
   openSheet(`
     <div class="sh-hd"><div class="sh-title">메뉴</div>
@@ -1409,6 +1487,7 @@ function sheetDataMenu(){
     <div class="sh-div"></div>
     <button class="mrow" id="m-edit"><span class="mi">✏️</span><span class="mrow-t">여행 정보 수정</span></button>
     <button class="mrow" id="m-trips"><span class="mi">🗂</span><span class="mrow-t">여행 목록 / 새 여행</span></button>
+    <button class="mrow" id="m-tpl"><span class="mi">🧳</span><span class="mrow-t">내 기본 준비물 관리</span></button>
     <div class="sh-div"></div>
     <button class="mrow" id="m-export"><span class="mi">💾</span><span class="mrow-t">전체 JSON 백업</span></button>
     <button class="mrow" id="m-import"><span class="mi">📥</span><span class="mrow-t">JSON 불러오기</span></button>
@@ -1417,6 +1496,7 @@ function sheetDataMenu(){
   $('#m-dbx').onclick=sheetDropbox;
   $('#m-edit').onclick=()=>sheetTripForm(true);
   $('#m-trips').onclick=sheetTrips;
+  $('#m-tpl').onclick=sheetPackTemplate;
   $('#m-export').onclick=exportJSON;
   $('#m-import').onclick=importJSON;
   $('#m-del').onclick=()=>{
