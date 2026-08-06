@@ -161,6 +161,7 @@ button.tap{text-align:left;background:transparent;border:none;padding:0;font:inh
 .mchip.on{background:var(--label);border-color:var(--label);color:#fff;font-weight:600;}
 .mchip.on .cnt{color:rgba(255,255,255,.6);}
 .cnt{font-size:11px;color:var(--label3);font-weight:500;}
+.menu-off .txt{color:var(--label2);} .menu-off .tiny{color:var(--label3);}
 .src{color:var(--green-txt);font-weight:500;}
 .flash{animation:flash .6s ease;}
 @keyframes flash{0%{background:#FFF6D9;}100%{background:transparent;}}
@@ -322,7 +323,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;
 
 <script>
 'use strict';
-const VERSION='v0.27', BUILD_TIME='2026-08-06 18:40';
+const VERSION='v0.28', BUILD_TIME='2026-08-06 19:10';
 const KEY='tripprep_v1';
 
 /* ================= 유틸 ================= */
@@ -1017,9 +1018,18 @@ function viewMarket(t){
   const left=all-done;
   const nowMerged=new Set(items.filter(i=>i.from.length>1).map(i=>i.key));
 
-  const chips=menus.map(m=>`<button class="mchip ${m.picked?'on':''}" data-menu="${m.id}">
-      <span class="e">${esc(m.emoji||'🍽')}</span>${esc(m.name)}
-      <span class="cnt">${(m.ing||[]).length}</span></button>`).join('');
+  // 메뉴 = 행 리스트: 왼쪽 동그라미로 담기, 이름을 눌러 '필요한 것' 묶음 보기
+  const menuRowsHtml=menus.map(m=>{
+    const cold=(m.ing||[]).some(i=>COLD[i.c]);
+    const prev=(m.ing||[]).map(i=>esc(i.n)).join(' · ')||'재료 없음';
+    return `<div class="row ${m.picked?'':'menu-off'}">
+      <button class="cb ${m.picked?'on':''}" data-menu="${m.id}">${CHECK}</button>
+      <button class="grow tap" data-menubundle="${m.id}">
+        <div class="txt" style="font-weight:600">${esc(m.emoji||'🍽')} ${esc(m.name)}</div>
+        <div class="tiny">${prev}</div></button>
+      ${cold?'<span class="pill-tag tag-cold">냉장</span>':''}
+      ${CHEV}</div>`;
+  }).join('');
 
   const cats=MKT_CATS.filter(c=>items.some(i=>i.c===c));
   const allOpen=cats.every(c=>!UI.mktClosed[c]);
@@ -1066,8 +1076,8 @@ function viewMarket(t){
   </div>
   <div style="display:${UI.seg==='menu'?'block':'none'}">
     <div class="sec">
-      <div class="sec-hd"><div class="sec-title">메뉴</div><div class="sec-note">탭해서 선택 · 길게 눌러 편집</div></div>
-      ${menus.length?`<div class="menu-grid">${chips}</div>`:'<div class="empty">메뉴가 없습니다.</div>'}
+      <div class="sec-hd"><div class="sec-title">메뉴</div><div class="sec-note">○ 담기 · 눌러서 필요한 것 보기</div></div>
+      ${menus.length?menuRowsHtml:'<div class="empty">메뉴가 없습니다.</div>'}
       <button class="addbtn" id="btnAddMenu"><span class="plus">+</span> 메뉴 추가</button>
       ${DB.trips.some(x=>x.id!==t.id&&(x.menus||[]).length)?
         `<button class="addbtn" id="btnImportMenus" style="border-top:1px solid var(--sep)">
@@ -2261,11 +2271,12 @@ document.addEventListener('click',ev=>{
 
   const mn=T.closest('[data-menu]');
   if(mn){
-    if(menuLongPressed){menuLongPressed=false;return;}   // 길게 눌러 편집한 직후 click은 선택 토글 안 함
     const t=curTrip(),m=t.menus.find(x=>x.id===mn.dataset.menu);
     if(m){m.picked=!m.picked;save();render();}
     return;
   }
+  const mbd=T.closest('[data-menubundle]');
+  if(mbd){sheetMenuBundle(mbd.dataset.menubundle);return;}
   const om=T.closest('[data-openmenu]');
   if(om){sheetMenuBundle(om.dataset.openmenu);return;}
   if(T.closest('#btnAddMenu')){sheetMenuEdit(null);return;}
@@ -2388,20 +2399,6 @@ function dragEnd(commit){
 }
 document.addEventListener('pointerup',()=>dragEnd(true));
 document.addEventListener('pointercancel',()=>dragEnd(false));
-
-// 메뉴 칩 길게 눌러 편집
-let pressT=null, menuLongPressed=false;
-document.addEventListener('pointerdown',ev=>{
-  const c=ev.target.closest('.mchip[data-menu]');
-  if(!c)return;
-  pressT=setTimeout(()=>{
-    pressT=null; menuLongPressed=true;
-    setTimeout(()=>{menuLongPressed=false;},700);   // click이 안 오는 경우(터치) 대비 자동 해제
-    sheetMenuBundle(c.dataset.menu);
-  },520);
-});
-['pointerup','pointercancel','pointermove'].forEach(e=>
-  document.addEventListener(e,()=>{if(pressT){clearTimeout(pressT);pressT=null;}}));
 
 window.closeSheet=closeSheet;
 render();
