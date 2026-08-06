@@ -317,7 +317,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;
 
 <script>
 'use strict';
-const VERSION='v0.19', BUILD_TIME='2026-08-06 13:30';
+const VERSION='v0.20', BUILD_TIME='2026-08-06 14:10';
 const KEY='tripprep_v1';
 
 /* ================= 유틸 ================= */
@@ -449,6 +449,10 @@ const MKT_CATS=['채소','정육','수산','냉장','소스·양념','기타','�
 const MKT_IC={'채소':'🥬','정육':'🥩','수산':'🐟','냉장':'❄️','소스·양념':'🧂','기타':'🛒','집에서 챙기기':'🏠'};
 const COLD={'정육':1,'수산':1,'냉장':1};
 const EMOJIS=['🍚','🍲','🍢','🥓','🍜','🍖','🍗','🥘','🍛','🍞','🥗','🍝','🌮','🍕','🍤','🥞','☕','🍉'];
+
+/* 출발일·마지막 날 '오늘' 탭에 자동으로 뜨는 고정 체크 */
+const DEP_CHECK=['가스 · 전등 · 에어컨 끄기','창문 · 문 잠금','냉장고 정리 · 음식물 처리','충전 중인 기기 챙기기'];
+const RET_CHECK=['충전기 · 케이블','냉장고 · 냉동실 음식','욕실 · 침대 주변 소지품','쓰레기 · 설거지','숙소키 반납 · 분실물 최종 확인'];
 
 /* ===== 내장 레시피 사전 =====
    [메뉴명, 아이콘, '재료,수량단위,분류|...']  ※ 모두 1인분 기준
@@ -592,7 +596,7 @@ function scaleIng(ing,people){
 
 /* ================= 데이터 ================= */
 // day:null → 첫 렌더에서 오늘 날짜에 해당하는 Day 로 자동 선택
-let DB=loadDB(), UI={tab:'today',day:null,seg:'menu',openCats:{},mktClosed:{},editingMenu:null};
+let DB=loadDB(), UI={tab:'today',day:null,seg:'menu',openCats:{},mktClosed:{}};
 
 function loadDB(){
   try{const r=JSON.parse(localStorage.getItem(KEY));
@@ -643,24 +647,35 @@ const qtyStr=n=>n>1?'×'+n:'';
 function nightsOf(t){return Math.max(0,diffDays(t.dateStart,t.dateEnd));}
 function daysOf(t){return nightsOf(t)+1;}
 
-// 이름 → 수량 규칙 (내 기본 준비물에서도 상의 ×박수, 칫솔 ×인원수 유지용)
-const NAME_RULE={};
-PACK_TPL.forEach(g=>g.items.forEach(it=>{if(it.q)NAME_RULE[it.n]={q:it.q,s:it.s};}));
+// 이름 → 수량 규칙 / 유형 제한 (내 기본 준비물에서도 상의 ×박수, 여권=해외 전용 등 유지용)
+const NAME_RULE={}, NAME_ONLY={};
+PACK_TPL.forEach(g=>g.items.forEach(it=>{
+  if(it.q)NAME_RULE[it.n]={q:it.q,s:it.s};
+  if(it.only)NAME_ONLY[it.n]=it.only;
+}));
 
 function genPack(t){
   const n=nightsOf(t),p=t.people||1;
-  // 내 기본 준비물이 저장돼 있으면 그걸 사용 (이름·분류 목록 + 알려진 수량 규칙 적용)
+  const mk=(cat,name)=>{const r=NAME_RULE[name];
+    return {id:uid(),cat,name,qty:r?r.q(n,p):'',auto:r&&r.s?r.s(n,p):'',done:false};};
+  // 내 기본 준비물이 저장돼 있으면 그걸 사용
   const tpl=DB.packTemplate;
   if(Array.isArray(tpl)&&tpl.length){
-    return tpl.map(it=>{
-      const r=NAME_RULE[it.name];
-      return {id:uid(),cat:it.cat,name:it.name,qty:r?r.q(n,p):'',auto:r&&r.s?r.s(n,p):'',done:false};
-    });
+    const tplType=DB.packTemplateType||'domestic';
+    // 이 유형에 안 맞는 항목 제외 (예: 국내 템플릿의 자동차키를 해외 여행에서)
+    const list=tpl.filter(it=>{const o=NAME_ONLY[it.name];return !o||o.includes(t.type);})
+      .map(it=>mk(it.cat,it.name));
+    // 템플릿 저장 당시 유형엔 없어서 지울 기회도 없던 유형 전용 항목(여권 등) 보충
+    PACK_TPL.forEach(g=>g.items.forEach(it=>{
+      if(!it.only||!it.only.includes(t.type)||it.only.includes(tplType))return;
+      if(!list.some(x=>x.name===it.n))list.push(mk(g.cat,it.n));
+    }));
+    return list;
   }
   const out=[];
   PACK_TPL.forEach(g=>g.items.forEach(it=>{
     if(it.only&&!it.only.includes(t.type))return;
-    out.push({id:uid(),cat:g.cat,name:it.n,qty:it.q?it.q(n,p):'',auto:it.s?it.s(n,p):'',done:false});
+    out.push(mk(g.cat,it.n));
   }));
   return out;
 }
@@ -669,10 +684,11 @@ function savePackTemplate(t){
   DB.packTemplate=(t.pack||[])
     .filter(pi=>pi.cat!=='아이스박스'&&pi.cat!=='조리도구')
     .map(pi=>({cat:pi.cat,name:pi.name}));
+  DB.packTemplateType=t.type||'domestic';
 }
 
 function newTrip(f){
-  const t={id:uid(),name:f.name,dest:f.dest||'',stay:f.stay||'',type:f.type||'domestic',
+  const t={id:uid(),name:f.name,stay:f.stay||'',type:f.type||'domestic',
     dateStart:f.dateStart,dateEnd:f.dateEnd,people:f.people||1,
     pack:[],menus:[],bought:[],extras:[],plans:[],createdAt:Date.now()};
   t.pack=genPack(t);
@@ -866,12 +882,34 @@ function viewToday(t){
     ${tl}
     <button class="addbtn" id="btnAddPlan"><span class="plus">+</span> 일정 추가</button>
   </div>
+  ${quickCheckCard(t,UI.day,D)}
   <div class="sec">
     <div class="sec-hd"><div class="sec-title">이 날 메뉴</div>
       <div class="sec-note">${dayMenus.length}개</div></div>
     ${menuRows}
   </div>`;
 }
+/* 출발일(Day 1)엔 집 체크, 마지막 날엔 귀가 체크 카드 */
+function quickCheckCard(t,day,D){
+  const cards=[];
+  t.chk=t.chk||{dep:[],ret:[]};
+  const build=(kind,icon,title,items)=>{
+    const on=t.chk[kind]||[];
+    const dn=items.filter(x=>on.includes(x)).length;
+    return `<div class="sec">
+      <div class="sec-hd"><div class="sec-title">${icon} ${title}</div>
+        <div class="sec-note ${dn===items.length?'src':''}">${dn}/${items.length}</div></div>
+      ${items.map(x=>`<div class="row ${on.includes(x)?'done':''}">
+        <button class="cb ${on.includes(x)?'on':''}" data-chk="${kind}|${esc(x)}">${CHECK}</button>
+        <div class="grow"><div class="txt">${esc(x)}</div></div>
+      </div>`).join('')}
+    </div>`;
+  };
+  if(day===0)cards.push(build('dep','🏠','출발 전 · 집 체크',DEP_CHECK));
+  if(day===D-1)cards.push(build('ret','🧳','떠나기 전 · 숙소 체크',RET_CHECK));
+  return cards.join('');
+}
+
 function nearestPlan(plans){
   const now=new Date(),hm=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
   let idx=-1; plans.forEach((p,i)=>{if(p.time&&p.time<=hm)idx=i;});
@@ -988,6 +1026,9 @@ function viewMarket(t){
       <div class="sec-hd"><div class="sec-title">메뉴</div><div class="sec-note">탭해서 선택 · 길게 눌러 편집</div></div>
       ${menus.length?`<div class="menu-grid">${chips}</div>`:'<div class="empty">메뉴가 없습니다.</div>'}
       <button class="addbtn" id="btnAddMenu"><span class="plus">+</span> 메뉴 추가</button>
+      ${DB.trips.some(x=>x.id!==t.id&&(x.menus||[]).length)?
+        `<button class="addbtn" id="btnImportMenus" style="border-top:1px solid var(--sep)">
+          <span class="plus">↓</span> 지난 여행에서 메뉴 가져오기</button>`:''}
     </div>
     <div class="banner b"><div class="bi">🛒</div><div>
       <div class="banner-t">고른 메뉴의 재료가 자동으로 합쳐집니다</div>
@@ -1303,6 +1344,14 @@ function sheetTripForm(edit,tripId){
     if(edit){
       const cur=t;
       Object.assign(cur,{name,type,dateStart:ds,dateEnd:de,people,stay});
+      // 자동 계산 항목만 새 박수·인원으로 재계산 (직접 고친 항목·체크 상태는 유지)
+      const rn=nightsOf(cur), rp=cur.people||1;
+      (cur.pack||[]).forEach(pi=>{
+        if(pi.auto&&NAME_RULE[pi.name]){
+          const r=NAME_RULE[pi.name];
+          pi.qty=r.q(rn,rp); pi.auto=r.s?r.s(rn,rp):'';
+        }
+      });
       // 날짜가 줄었으면 범위 밖 일정·메뉴의 day 정리
       const last=daysOf(cur)-1;
       (cur.plans||[]).forEach(p=>{if(p.day>last)p.day=last;});
@@ -1494,7 +1543,11 @@ function sheetPack(cat,id){
     const name=$('#a-name').value.trim();
     if(!name){toast('항목을 입력해 주세요');return;}
     const qty=qtyStr(Math.max(1,parseInt($('#a-qty').value,10)||1));
-    if(p){Object.assign(p,{name,qty,cat:sel});}
+    if(p){
+      const manual=qty!==p.qty||name!==p.name;
+      Object.assign(p,{name,qty,cat:sel});
+      if(manual)p.auto='';   // 직접 고친 항목은 이후 자동 재계산 대상에서 제외
+    }
     else{t.pack.push({id:uid(),cat:sel,name,qty,auto:'',done:false});}
     UI.openCats[sel]=true; save();closeSheet();render();toast(p?'저장했습니다':'추가했습니다');
   };
@@ -1634,20 +1687,36 @@ function sheetEditBuy(key){
   $('#b-del').onclick=()=>{closeSheet();deleteBuyItem(key);};
 }
 
-// 직접 추가한 장보기 항목을 메뉴의 재료로 옮김
-function moveExtraToMenu(key,menuId){
+/* 지난 여행에서 메뉴 복사 (이름이 같은 메뉴는 건너뜀) */
+function sheetImportMenus(){
   const t=curTrip();
-  const idx=(t.extras||[]).findIndex(x=>x.n+'|'+(x.u||'')===key);
-  const m=t.menus.find(x=>x.id===menuId);
-  if(idx<0||!m)return null;
-  const [x]=t.extras.splice(idx,1);
-  const ov=(t.overrides||{})[key]||{};
-  m.ing=m.ing||[];
-  m.ing.push({n:x.n, q:ov.q!=null?ov.q:x.q, u:ov.u||x.u, c:ov.c||x.c});
-  m.picked=true;
-  if(t.overrides)delete t.overrides[key];
-  saveToLibrary(m.name,m.emoji,m.ing,t.people||1,m.gear);   // 내 사전에도 반영
-  return m;
+  const others=DB.trips.filter(x=>x.id!==t.id&&(x.menus||[]).length)
+    .sort((a,b)=>String(b.dateStart).localeCompare(String(a.dateStart)));
+  openSheet(`
+    <div class="sh-hd"><div class="sh-title">지난 여행에서 가져오기</div>
+      <button class="icon-btn" onclick="closeSheet()">${XICO}</button></div>
+    ${others.map(x=>{
+      const n=nightsOf(x);
+      return `<button class="mrow" data-imp="${x.id}">
+        <span class="mi">🗓</span>
+        <span class="grow"><span class="mrow-t">${esc(x.name)}</span>
+          <div class="tiny">${fmtMD(x.dateStart)} – ${fmtMD(x.dateEnd)} · ${n}박${n+1}일 ·
+            메뉴 ${(x.menus||[]).length}개 (${(x.menus||[]).slice(0,4).map(m=>esc(m.name)).join(' · ')}${x.menus.length>4?' …':''})</div></span>
+      </button>`;}).join('')||'<div class="empty">가져올 여행이 없습니다.</div>'}`);
+}
+function importMenusFrom(tripId){
+  const t=curTrip(), src=DB.trips.find(x=>x.id===tripId);
+  if(!src)return;
+  const have=new Set((t.menus||[]).map(m=>m.name));
+  let added=0;
+  (src.menus||[]).forEach(m=>{
+    if(have.has(m.name))return;
+    t.menus.push({id:uid(),name:m.name,emoji:m.emoji,day:null,picked:false,
+      ing:(m.ing||[]).map(i=>({...i})),gear:(m.gear||[]).slice()});
+    added++;
+  });
+  save();closeSheet();render();
+  toast(added?`메뉴 ${added}개를 가져왔습니다`:'가져올 새 메뉴가 없습니다 (이미 모두 있음)');
 }
 
 // 레시피에서 온 항목은 '제외 목록'으로, 직접 추가한 항목은 실제 삭제
@@ -1958,6 +2027,16 @@ document.addEventListener('click',ev=>{
   const cat=T.closest('[data-cat]');
   if(cat){const c=cat.dataset.cat;UI.openCats[c]=!UI.openCats[c];render();return;}
 
+  const ck=T.closest('[data-chk]');
+  if(ck){
+    const t=curTrip(); t.chk=t.chk||{dep:[],ret:[]};
+    const [kind,label]=ck.dataset.chk.split('|');
+    const arr=t.chk[kind]=t.chk[kind]||[];
+    const i=arr.indexOf(label);
+    if(i>=0)arr.splice(i,1); else arr.push(label);
+    save();render();return;
+  }
+
   const mcat=T.closest('[data-mktcat]');
   if(mcat){const c=mcat.dataset.mktcat;UI.mktClosed[c]=!UI.mktClosed[c];render();return;}
   if(T.closest('#mktToggleAll')){
@@ -1992,6 +2071,9 @@ document.addEventListener('click',ev=>{
   const om=T.closest('[data-openmenu]');
   if(om){sheetMenuEdit(om.dataset.openmenu);return;}
   if(T.closest('#btnAddMenu')){sheetMenuEdit(null);return;}
+  if(T.closest('#btnImportMenus')){sheetImportMenus();return;}
+  const imp=T.closest('[data-imp]');
+  if(imp){importMenusFrom(imp.dataset.imp);return;}
 
   const eb=T.closest('[data-editbuy]');
   if(eb){sheetEditBuy(eb.dataset.editbuy);return;}
@@ -2015,7 +2097,7 @@ document.addEventListener('click',ev=>{
   }
   if(T.closest('#btnResetPackTpl')){
     if(!confirm('내 기본 준비물을 지우고 앱 기본으로 되돌릴까요?\n(이미 만든 여행은 그대로입니다)'))return;
-    delete DB.packTemplate; save(); render();
+    delete DB.packTemplate; delete DB.packTemplateType; save(); render();
     toast('앱 기본 준비물로 되돌렸습니다');
     return;
   }
