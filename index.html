@@ -322,7 +322,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;
 
 <script>
 'use strict';
-const VERSION='v0.23', BUILD_TIME='2026-08-06 16:10';
+const VERSION='v0.24', BUILD_TIME='2026-08-06 16:50';
 const KEY='tripprep_v1';
 
 /* ================= 유틸 ================= */
@@ -931,7 +931,7 @@ function orderedPackCats(){
          - (ib<0?PACK_CATS.findIndex(x=>x.cat===b.cat)+100:ib);
   });
 }
-const HANDLE='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/></svg>';
+const HANDLE='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>';
 
 function viewPack(t){
   const done=t.pack.filter(p=>p.done).length,all=t.pack.length;
@@ -943,13 +943,14 @@ function viewPack(t){
   const accs=cats.map((c,ci)=>{
     const items=t.pack.filter(p=>p.cat===c.cat);
     const dn=items.filter(p=>p.done).length;
-    const open=sort?true:!!UI.openCats[c.cat];   // 정렬 모드에선 전부 펼침
+    const open=!!UI.openCats[c.cat];   // 정렬 모드도 접힌 채 시작, 탭해서 열고 항목 정렬
     const hdTag=sort?'div':'button';   // button 안에 다른 버튼 중첩 시 DOM이 깨짐
     return `<div class="acc ${open?'open':''}" ${sort?`data-sortcat="${esc(c.cat)}"`:''}>
-      <${hdTag} class="acc-hd" ${sort?'':`data-cat="${esc(c.cat)}"`}>
+      <${hdTag} class="acc-hd" data-cat="${esc(c.cat)}">
         <span class="acc-ic">${c.ic}</span>
         <span class="acc-name">${esc(c.cat)}</span>
-        ${sort?`<span class="drag-h" data-kind="cat">${HANDLE}</span>`
+        ${sort?`<span class="acc-count">${items.length}</span>${CHEV}
+            <span class="drag-h" data-kind="cat">${HANDLE}</span>`
           :`<span class="acc-count ${dn===items.length?'full':''}">${dn}/${items.length}</span>${CHEV}`}
       </${hdTag}>
       <div class="acc-body">
@@ -974,7 +975,7 @@ function viewPack(t){
   </div>
   ${sort?`<div class="banner b"><div class="bi">↕️</div><div>
     <div class="banner-t">순서 바꾸기</div>
-    <div class="banner-d">≡ 를 누른 채 위아래로 끌어서 옮깁니다. 카테고리 순서는 모든 여행에 적용됩니다.</div>
+    <div class="banner-d">≡ 를 누른 채 끌면 카드가 따라 움직입니다. 카테고리를 탭해 열면 안의 항목도 옮길 수 있습니다.</div>
   </div></div>`
   :`<div class="banner g"><div class="bi">✨</div><div>
     <div class="banner-t">${DB.packTemplate?'내 기본 준비물 사용 중':esc(typeName)+' · '+nightsOf(t)+'박'+daysOf(t)+'일 · '+t.people+'명 기준'}</div>
@@ -2113,6 +2114,8 @@ function importJSON(){
 /* ================= 이벤트 ================= */
 document.addEventListener('click',ev=>{
   const T=ev.target;
+  if(dragJustEnded){dragJustEnded=false;return;}   // 드래그 마무리 click 무시
+  if(T.closest('.drag-h'))return;                  // 핸들 클릭은 토글 아님
 
   if(T.closest('#btnNewTrip')){sheetTripForm(false);return;}
   if(T.closest('#btnTrips')){sheetTrips();return;}
@@ -2198,7 +2201,11 @@ document.addEventListener('click',ev=>{
     return;
   }
 
-  if(T.closest('#btnPackSort')){UI.packSort=!UI.packSort;render();return;}
+  if(T.closest('#btnPackSort')){
+    UI.packSort=!UI.packSort;
+    if(UI.packSort)UI.openCats={};   // 정렬 모드 진입 시 전부 접어 카테고리 이동을 쉽게
+    render();return;
+  }
   if(T.closest('#btnSavePackTpl')){
     const t=curTrip(); savePackTemplate(t); save();
     toast(`이 준비물(${DB.packTemplate.length}개)을 기본값으로 저장했습니다`);
@@ -2230,37 +2237,53 @@ document.addEventListener('click',ev=>{
   }
 });
 
-/* ---- 준비물 순서: ≡ 핸들을 누른 채 드래그 ---- */
-let DRG=null;
+/* ---- 준비물 순서: ≡ 핸들을 누른 채 드래그 (카드가 손가락을 따라 움직임) ---- */
+let DRG=null, dragJustEnded=false;
 document.addEventListener('pointerdown',e=>{
   const h=e.target.closest('.drag-h'); if(!h)return;
   const kind=h.dataset.kind;
   const el=kind==='item'?h.closest('.row'):h.closest('.acc');
   if(!el)return;
   e.preventDefault();
-  DRG={kind,el,container:el.parentElement,moved:false};
+  const r=el.getBoundingClientRect();
+  DRG={kind,el,container:el.parentElement,grabDY:e.clientY-r.top,h:r.height,ty:0,moved:false};
   el.classList.add('dragging');
   try{h.setPointerCapture(e.pointerId);}catch(_){}
 });
 document.addEventListener('pointermove',e=>{
   if(!DRG)return;
   e.preventDefault();
+  const {el,container}=DRG;
   const sel=DRG.kind==='item'?'[data-rowid]':'[data-sortcat]';
-  const sibs=[...DRG.container.children].filter(x=>x!==DRG.el&&x.matches(sel));
-  if(!sibs.length)return;
-  DRG.moved=true;
-  const y=e.clientY;
-  let placed=false;
-  for(const s of sibs){
-    const r=s.getBoundingClientRect();
-    if(y<r.top+r.height/2){DRG.container.insertBefore(DRG.el,s);placed=true;break;}
+  // 카드가 손가락을 따라오도록 transform
+  const targetTop=e.clientY-DRG.grabDY;
+  const layoutTop=el.getBoundingClientRect().top-DRG.ty;
+  DRG.ty=targetTop-layoutTop;
+  if(Math.abs(DRG.ty)>3)DRG.moved=true;
+  el.style.transform=`translateY(${DRG.ty}px)`;
+  // 카드의 시각적 중심이 이웃 중심을 지나면 자리 교체 (한 번에 한 칸)
+  const centerY=targetTop+DRG.h/2;
+  const near=dir=>{let x=dir>0?el.nextElementSibling:el.previousElementSibling;
+    while(x&&!x.matches(sel))x=dir>0?x.nextElementSibling:x.previousElementSibling;return x;};
+  const prev=near(-1), next=near(1);
+  let swapped=false;
+  if(prev){const pr=prev.getBoundingClientRect();
+    if(centerY<pr.top+pr.height/2){container.insertBefore(el,prev);swapped=true;}}
+  if(!swapped&&next){const nr=next.getBoundingClientRect();
+    if(centerY>nr.top+nr.height/2){next.after(el);swapped=true;}}
+  if(swapped){
+    // DOM 이동으로 레이아웃 위치가 바뀌었으니 transform 재계산 (손가락 아래 유지)
+    const nl=el.getBoundingClientRect().top-DRG.ty;
+    DRG.ty=targetTop-nl;
+    el.style.transform=`translateY(${DRG.ty}px)`;
   }
-  if(!placed)sibs[sibs.length-1].after(DRG.el);
 });
 function dragEnd(commit){
   if(!DRG)return;
   const {kind,el,container,moved}=DRG;
-  el.classList.remove('dragging'); DRG=null;
+  el.classList.remove('dragging'); el.style.transform='';
+  DRG=null;
+  if(moved)dragJustEnded=true;   // 드래그 직후 발생하는 click이 헤더를 토글하지 않게
   const t=curTrip(); if(!t)return;
   if(!moved||!commit){render();return;}   // 이동 없거나 취소면 원상 복구
   if(kind==='cat'){
