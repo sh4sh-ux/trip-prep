@@ -323,7 +323,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;
 
 <script>
 'use strict';
-const VERSION='v0.29', BUILD_TIME='2026-08-06 19:40';
+const VERSION='v0.30', BUILD_TIME='2026-08-06 20:10';
 const KEY='tripprep_v1';
 
 /* ================= 유틸 ================= */
@@ -1660,43 +1660,49 @@ function sheetMenuBundle(menuId){
     const share={};
     (t.menus||[]).filter(x=>x.picked).forEach(x=>(x.gear||[]).forEach(g=>{share[g]=(share[g]||0)+1;}));
     const gear=m.gear||[], ing=m.ing||[];
-    const consum=ing.filter(i=>CONSUMABLES.has(i.n)), food=ing.filter(i=>!CONSUMABLES.has(i.n));
+    const relib=()=>saveToLibrary(m.name,m.emoji,m.ing,t.people||1,m.gear);
 
-    const gearRow=name=>{
+    const gearRow=(name,gi)=>{
       const pi=t.pack.find(p=>p.cat==='조리도구'&&p.name===name);
       const done=pi?pi.done:false, shared=(share[name]||0)>1;
       return `<div class="row ${done?'done':''}">
         <button class="cb ${done?'on':''}" ${pi?`data-bgear="${esc(name)}"`:'disabled style="opacity:.4"'}>${CHECK}</button>
-        <div class="grow"><div class="txt">${esc(name)}</div>
-          ${shared?'<div class="tiny">공유 · 다른 메뉴와 함께 씀</div>':''}</div>
+        <button class="grow tap" data-gedit="${gi}"><div class="txt">${esc(name)}</div>
+          ${shared?'<div class="tiny">공유 · 다른 메뉴와 함께 씀</div>':''}</button>
+        <button class="del-x" data-gdel="${gi}">${XICO}</button>
       </div>`;
     };
-    const ingRow=i=>{
+    const ingRow=(i,ii)=>{
       const key=i.n+'|'+(i.u||''), on=bought.has(key);
       const q=Number.isInteger(i.q)?i.q:Number(i.q.toFixed(2));
       return `<div class="row ${on?'done':''}">
         <button class="cb ${on?'on':''}" data-bbuy="${esc(key)}">${CHECK}</button>
-        <div class="grow"><div class="txt">${esc(i.n)}</div></div>
+        <button class="grow tap" data-iedit="${ii}"><div class="txt">${esc(i.n)}</div></button>
         <div class="qty">${q}${esc(i.u||'')}</div>
+        <button class="del-x" data-idel="${ii}">${XICO}</button>
       </div>`;
     };
-    const group=(icon,title,rows,count)=>rows?`
+    const consumRows=[], foodRows=[];
+    ing.forEach((i,ii)=>{(CONSUMABLES.has(i.n)?consumRows:foodRows).push(ingRow(i,ii));});
+    const gearRows=gear.map((n,gi)=>gearRow(n,gi)).join('');
+    const addBtn=(id,label)=>`<button class="addbtn" id="${id}"><span class="plus">+</span> ${label}</button>`;
+    const group=(icon,title,rowsHtml,count,addHtml)=>`
       <div class="sec" style="margin:0 20px 10px;border:1px solid var(--sep)">
         <div class="sec-hd"><div class="sec-title">${icon} ${title}</div>
           <div class="sec-note">${count}</div></div>
-        ${rows}</div>`:'';
+        ${rowsHtml||'<div class="empty" style="padding:14px">아직 없습니다</div>'}
+        ${addHtml||''}</div>`;
 
     openSheet(`
       <div class="sh-hd"><div class="sh-title">${esc(m.emoji||'🍽')} ${esc(m.name)}</div>
         <div class="hd-right">
-          <button class="icon-btn" id="mb-edit" aria-label="메뉴 편집">${PENCIL}</button>
+          <button class="icon-btn" id="mb-edit" aria-label="이름·아이콘 편집">${PENCIL}</button>
           <button class="icon-btn" onclick="closeSheet()">${XICO}</button></div></div>
       ${m.picked?'':`<div class="hint" style="margin:0 20px 12px">아직 장보기에 담지 않은 메뉴입니다.
         담으면 도구는 준비물에, 재료는 장보기에 자동으로 들어갑니다.</div>`}
-      ${group('🍳','조리도구',gear.map(gearRow).join(''),gear.length)}
-      ${group('🧴','소모품',consum.map(ingRow).join(''),consum.length)}
-      ${group('🥬','재료',food.map(ingRow).join(''),food.length)}
-      ${(!gear.length&&!ing.length)?'<div class="empty">등록된 도구·재료가 없습니다.<br>연필로 편집해 채워보세요.</div>':''}
+      ${group('🍳','조리도구',gearRows,gear.length,addBtn('mb-gadd','도구 추가'))}
+      ${consumRows.length?group('🧴','소모품',consumRows.join(''),consumRows.length,''):''}
+      ${group('🥬','재료',foodRows.join(''),foodRows.length,addBtn('mb-iadd','재료 추가'))}
       <div class="sh-body" style="padding-top:6px">
         <button class="btn ${m.picked?'ghost':''}" id="mb-pick" ${m.picked?'style="color:var(--label)"':''}>
           ${m.picked?'장보기에서 빼기':'＋ 이 메뉴 담기'}</button>
@@ -1715,8 +1721,93 @@ function sheetMenuBundle(menuId){
       if(i>=0)t.bought.splice(i,1); else t.bought.push(k);
       save();render();draw();
     });
+    $('#sheet').querySelectorAll('[data-iedit]').forEach(b=>b.onclick=()=>bundleItemForm(menuId,{kind:'ing',index:+b.dataset.iedit}));
+    $('#sheet').querySelectorAll('[data-gedit]').forEach(b=>b.onclick=()=>bundleItemForm(menuId,{kind:'gear',index:+b.dataset.gedit}));
+    const ia=$('#mb-iadd'); if(ia)ia.onclick=()=>bundleItemForm(menuId,{kind:'ing',index:null});
+    const ga=$('#mb-gadd'); if(ga)ga.onclick=()=>bundleItemForm(menuId,{kind:'gear',index:null});
+    $('#sheet').querySelectorAll('[data-idel]').forEach(b=>b.onclick=()=>{
+      const idx=+b.dataset.idel, removed=m.ing[idx];
+      m.ing.splice(idx,1); relib(); save();render();draw();
+      toast(`'${removed.n}' 뺐습니다`,'되돌리기',()=>{m.ing.splice(idx,0,removed);relib();save();render();draw();});
+    });
+    $('#sheet').querySelectorAll('[data-gdel]').forEach(b=>b.onclick=()=>{
+      const idx=+b.dataset.gdel, removed=m.gear[idx];
+      m.gear.splice(idx,1); relib(); save();render();draw();
+      toast(`'${removed}' 뺐습니다`,'되돌리기',()=>{m.gear.splice(idx,0,removed);relib();save();render();draw();});
+    });
   };
   draw();
+}
+
+/* 묶음 시트에서 재료·도구 한 항목을 추가/편집 (index 있으면 편집). 저장·취소 시 묶음으로 복귀 */
+function bundleItemForm(menuId,spec){
+  const t=curTrip(); const m=(t.menus||[]).find(x=>x.id===menuId);
+  if(!m){closeSheet();return;}
+  const relib=()=>saveToLibrary(m.name,m.emoji,m.ing,t.people||1,m.gear);
+  const back=()=>sheetMenuBundle(menuId);
+  const editing=spec.index!=null;
+
+  if(spec.kind==='gear'){
+    const cur=editing?m.gear[spec.index]:'';
+    openSheet(`
+      <div class="sh-hd"><div class="sh-title">${editing?'도구 편집':'도구 추가'}</div>
+        <button class="icon-btn" id="bi-x">${XICO}</button></div>
+      <div class="sh-body">
+        <div class="fld"><div class="fld-lab">도구 이름</div>
+          <input class="inp" id="bi-name" placeholder="예: 냄비" value="${esc(cur||'')}"></div>
+        <button class="btn" id="bi-save">${editing?'저장':'추가'}</button>
+        ${editing?`<button class="btn ghost" id="bi-del">이 도구 삭제</button>`:''}
+      </div>`);
+    $('#bi-x').onclick=back;
+    if(!editing)setTimeout(()=>$('#bi-name').focus(),60);
+    $('#bi-save').onclick=()=>{
+      const name=$('#bi-name').value.trim();
+      if(!name){toast('도구 이름을 입력해 주세요');return;}
+      m.gear=m.gear||[];
+      if(editing)m.gear[spec.index]=name;
+      else if(!m.gear.includes(name))m.gear.push(name);
+      relib(); save();render();back(); toast(editing?'저장했습니다':'도구를 추가했습니다');
+    };
+    if(editing)$('#bi-del').onclick=()=>{m.gear.splice(spec.index,1);relib();save();render();back();toast('삭제했습니다');};
+    return;
+  }
+
+  // 재료
+  const cur=editing?m.ing[spec.index]:null;
+  let sel=cur?cur.c:'', catManual=!!cur;
+  const qv=cur?((Number.isInteger(cur.q)?cur.q:Number(cur.q.toFixed(2)))+(cur.u||'')):'';
+  openSheet(`
+    <div class="sh-hd"><div class="sh-title">${editing?'재료 편집':'재료 추가'}</div>
+      <button class="icon-btn" id="bi-x">${XICO}</button></div>
+    <div class="sh-body">
+      <div class="fld"><div class="fld-lab">재료</div>
+        <input class="inp" id="bi-name" placeholder="예: 당근" value="${esc(cur?cur.n:'')}"></div>
+      <div class="fld"><div class="fld-lab">수량</div>
+        <input class="inp" id="bi-qty" placeholder="예: 2개 (비워두면 1개)" value="${esc(qv)}"></div>
+      <div class="fld"><div class="fld-lab">분류</div>
+        <div class="chips" id="bi-cat">${MKT_CATS.map(c=>
+          `<button class="chip ${c===sel?'on':''}" data-c="${esc(c)}">${MKT_IC[c]} ${c}</button>`).join('')}</div></div>
+      <div class="hint">이름만 넣어도 분류·단위가 자동으로 채워집니다. 분류는 직접 골라도 됩니다.</div>
+      <button class="btn" id="bi-save">${editing?'저장':'추가'}</button>
+      ${editing?`<button class="btn ghost" id="bi-del">이 재료 삭제</button>`:''}
+    </div>`);
+  $('#bi-x').onclick=back;
+  const setCat=c=>{sel=c;$('#bi-cat').querySelectorAll('.chip').forEach(x=>x.classList.toggle('on',x.dataset.c===c));};
+  $('#bi-cat').onclick=ev=>{const b=ev.target.closest('[data-c]');if(!b)return;catManual=true;setCat(b.dataset.c);};
+  const nameInp=$('#bi-name');
+  nameInp.oninput=()=>{if(catManual)return;const h=ingHint(nameInp.value.trim());if(h)setCat(h.c);};
+  if(!editing)setTimeout(()=>nameInp.focus(),60);
+  $('#bi-save').onclick=()=>{
+    const name=$('#bi-name').value.trim();
+    if(!name){toast('재료 이름을 입력해 주세요');return;}
+    // parseIng이 빈 수량·분류를 사전에서 자동으로 채움 (이름에 쉼표는 없다고 가정)
+    const parsed=parseIng(`${name.replace(/,/g,' ')}, ${$('#bi-qty').value.trim()}, ${sel}`)[0]
+      ||{n:name,q:1,u:'개',c:'기타'};
+    m.ing=m.ing||[];
+    if(editing)m.ing[spec.index]=parsed; else m.ing.push(parsed);
+    relib(); save();render();back(); toast(editing?'저장했습니다':'재료를 추가했습니다');
+  };
+  if(editing)$('#bi-del').onclick=()=>{m.ing.splice(spec.index,1);relib();save();render();back();toast('삭제했습니다');};
 }
 
 // "당근, 2개, 채소" → {n:'당근',q:2,u:'개',c:'채소'}
