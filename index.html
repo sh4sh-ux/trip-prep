@@ -206,6 +206,10 @@ button.tap{text-align:left;background:transparent;border:none;padding:0;font:inh
 .dchip.on{background:var(--label);border-color:var(--label);color:#fff;font-weight:600;}
 .dchip small{display:block;font-size:10.5px;opacity:.65;font-weight:400;margin-top:1px;}
 
+.ud{width:38px;height:34px;border:1px solid var(--sep2);border-radius:8px;background:var(--card);
+  color:var(--label2);font-size:13px;flex-shrink:0;margin-left:5px;}
+.ud:active{background:var(--fill);}
+.ud:disabled{color:#DCDCE0;border-color:var(--sep);}
 .pack-tpl{margin-top:14px;text-align:center;}
 .pack-tpl button{font-size:13px;font-weight:600;color:var(--blue-txt);padding:9px 14px;border-radius:9px;background:var(--blue-bg);width:100%;}
 .pack-tpl button:active{opacity:.7;}
@@ -317,7 +321,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;
 
 <script>
 'use strict';
-const VERSION='v0.20', BUILD_TIME='2026-08-06 14:10';
+const VERSION='v0.21', BUILD_TIME='2026-08-06 15:00';
 const KEY='tripprep_v1';
 
 /* ================= 유틸 ================= */
@@ -917,30 +921,48 @@ function nearestPlan(plans){
 }
 
 /* ---- 준비물 ---- */
+// 카테고리 표시 순서: DB.catOrder(전역 설정) 우선, 나머지는 기본 순서
+function orderedPackCats(){
+  const ord=DB.catOrder||[];
+  return PACK_CATS.slice().sort((a,b)=>{
+    const ia=ord.indexOf(a.cat), ib=ord.indexOf(b.cat);
+    return (ia<0?PACK_CATS.findIndex(x=>x.cat===a.cat)+100:ia)
+         - (ib<0?PACK_CATS.findIndex(x=>x.cat===b.cat)+100:ib);
+  });
+}
+const UPDOWN=(type,id,first,last)=>`
+  <button class="ud" data-${type}up="${esc(id)}" ${first?'disabled':''}>▲</button>
+  <button class="ud" data-${type}down="${esc(id)}" ${last?'disabled':''}>▼</button>`;
+
 function viewPack(t){
   const done=t.pack.filter(p=>p.done).length,all=t.pack.length;
   const pct=all?Math.round(done/all*100):0;
-  const cats=PACK_CATS.filter(c=>t.pack.some(p=>p.cat===c.cat));
+  const cats=orderedPackCats().filter(c=>t.pack.some(p=>p.cat===c.cat));
   const typeName=(TYPES.find(x=>x.k===t.type)||{}).n||'';
+  const sort=!!UI.packSort;
 
-  const accs=cats.map(c=>{
+  const accs=cats.map((c,ci)=>{
     const items=t.pack.filter(p=>p.cat===c.cat);
     const dn=items.filter(p=>p.done).length;
-    const open=!!UI.openCats[c.cat];
+    const open=sort?true:!!UI.openCats[c.cat];   // 정렬 모드에선 전부 펼침
+    const hdTag=sort?'div':'button';   // button 안에 ▲▼ button 중첩 시 DOM이 깨짐
     return `<div class="acc ${open?'open':''}">
-      <button class="acc-hd" data-cat="${esc(c.cat)}">
+      <${hdTag} class="acc-hd" ${sort?'':`data-cat="${esc(c.cat)}"`}>
         <span class="acc-ic">${c.ic}</span>
         <span class="acc-name">${esc(c.cat)}</span>
-        <span class="acc-count ${dn===items.length?'full':''}">${dn}/${items.length}</span>
-        ${CHEV}</button>
+        ${sort?UPDOWN('cat',c.cat,ci===0,ci===cats.length-1)
+          :`<span class="acc-count ${dn===items.length?'full':''}">${dn}/${items.length}</span>${CHEV}`}
+      </${hdTag}>
       <div class="acc-body">
-        ${items.map(p=>`<div class="row ${p.done?'done':''}">
-          <button class="cb ${p.done?'on':''}" data-pack="${p.id}">${CHECK}</button>
+        ${items.map((p,pi)=>`<div class="row ${p.done?'done':''}">
+          ${sort?`<div class="grow"><div class="txt">${esc(p.name)}</div></div>
+            ${UPDOWN('item',p.id,pi===0,pi===items.length-1)}`
+          :`<button class="cb ${p.done?'on':''}" data-pack="${p.id}">${CHECK}</button>
           <button class="grow tap" data-editpack="${p.id}"><div class="txt">${esc(p.name)}</div></button>
           ${qtyNum(p.qty)>1?`<div class="qty">×${qtyNum(p.qty)}</div>`:''}
-          <button class="del-x" data-delpack="${p.id}">${XICO}</button>
+          <button class="del-x" data-delpack="${p.id}">${XICO}</button>`}
         </div>`).join('')}
-        <button class="addbtn" data-addpack="${esc(c.cat)}"><span class="plus">+</span> 항목 추가</button>
+        ${sort?'':`<button class="addbtn" data-addpack="${esc(c.cat)}"><span class="plus">+</span> 항목 추가</button>`}
       </div></div>`;
   }).join('');
 
@@ -950,19 +972,25 @@ function viewPack(t){
       <div class="prog-num">${done} / ${all}</div></div>
     <div class="bar"><i class="${pct===100?'full':''}" style="width:${pct}%"></i></div>
   </div>
-  <div class="banner g"><div class="bi">✨</div><div>
+  ${sort?`<div class="banner b"><div class="bi">↕️</div><div>
+    <div class="banner-t">순서 바꾸기</div>
+    <div class="banner-d">▲▼로 카테고리와 항목 순서를 바꿉니다. 카테고리 순서는 모든 여행에 적용됩니다.</div>
+  </div></div>`
+  :`<div class="banner g"><div class="bi">✨</div><div>
     <div class="banner-t">${DB.packTemplate?'내 기본 준비물 사용 중':esc(typeName)+' · '+nightsOf(t)+'박'+daysOf(t)+'일 · '+t.people+'명 기준'}</div>
     <div class="banner-d">${DB.packTemplate
       ?'직접 저장한 기본 목록으로 만들어졌습니다. 상의·칫솔 등 수량은 이번 여행에 맞춰 계산됩니다.'
       :'상의·속옷은 여행 길이, 칫솔·수건은 인원수에 맞춰 수량이 계산됐습니다. 필요 없는 항목은 지우면 됩니다.'}</div>
-  </div></div>
+  </div></div>`}
+  <div class="mkt-tools"><button id="btnPackSort">${sort?'✓ 순서 편집 완료':'↕ 순서 바꾸기'}</button></div>
   <div class="sec">${accs||'<div class="empty">항목이 없습니다.</div>'}</div>
+  ${sort?'':`
   <button class="addbtn" data-addpack="기타" style="background:var(--card);border-radius:var(--r)">
     <span class="plus">+</span> 새 항목 추가</button>
   <div class="pack-tpl">
     <button id="btnSavePackTpl">📌 이 준비물을 다음 여행 기본값으로 저장</button>
     ${DB.packTemplate?`<button id="btnResetPackTpl" class="reset">기본값을 앱 기본으로 되돌리기</button>`:''}
-  </div>`;
+  </div>`}`;
 }
 
 /* ---- 장보기 ---- */
@@ -2090,6 +2118,30 @@ document.addEventListener('click',ev=>{
     return;
   }
 
+  if(T.closest('#btnPackSort')){UI.packSort=!UI.packSort;render();return;}
+  const cu=T.closest('[data-catup]'), cd=T.closest('[data-catdown]');
+  if(cu||cd){
+    const cat=(cu||cd).dataset.catup||(cu||cd).dataset.catdown;
+    const order=orderedPackCats().map(c=>c.cat);
+    const i=order.indexOf(cat), j=cu?i-1:i+1;
+    if(j>=0&&j<order.length){[order[i],order[j]]=[order[j],order[i]];DB.catOrder=order;save();render();}
+    return;
+  }
+  const iu=T.closest('[data-itemup]'), idn=T.closest('[data-itemdown]');
+  if(iu||idn){
+    const t=curTrip(), id=(iu||idn).dataset.itemup||(iu||idn).dataset.itemdown;
+    const me=t.pack.find(p=>p.id===id); if(!me)return;
+    // 같은 카테고리 안에서 이웃과 자리 교환 (전체 배열 인덱스 기준)
+    const idxAll=t.pack.indexOf(me);
+    const sib=t.pack.map((p,ix)=>({p,ix})).filter(x=>x.p.cat===me.cat);
+    const pos=sib.findIndex(x=>x.p===me), tgt=iu?pos-1:pos+1;
+    if(tgt>=0&&tgt<sib.length){
+      const other=sib[tgt].ix;
+      [t.pack[idxAll],t.pack[other]]=[t.pack[other],t.pack[idxAll]];
+      save();render();
+    }
+    return;
+  }
   if(T.closest('#btnSavePackTpl')){
     const t=curTrip(); savePackTemplate(t); save();
     toast(`이 준비물(${DB.packTemplate.length}개)을 기본값으로 저장했습니다`);
