@@ -317,7 +317,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;
 
 <script>
 'use strict';
-const VERSION='v0.18', BUILD_TIME='2026-08-06 13:00';
+const VERSION='v0.19', BUILD_TIME='2026-08-06 13:30';
 const KEY='tripprep_v1';
 
 /* ================= 유틸 ================= */
@@ -444,8 +444,9 @@ const GEAR_MAP={
 const recipeGear=name=>GEAR_MAP[name]?GEAR_MAP[name].slice():[];
 const gearNeedsGas=gear=>Array.isArray(gear)&&gear.includes('버너');
 
-const MKT_CATS=['채소','정육','수산','냉장','소스·양념','기타'];
-const MKT_IC={'채소':'🥬','정육':'🥩','수산':'🐟','냉장':'❄️','소스·양념':'🧂','기타':'🛒'};
+// '집에서 챙기기' — 사는 게 아니라 집에서 가져가는 것 (고추장·참기름·김치 등)
+const MKT_CATS=['채소','정육','수산','냉장','소스·양념','기타','집에서 챙기기'];
+const MKT_IC={'채소':'🥬','정육':'🥩','수산':'🐟','냉장':'❄️','소스·양념':'🧂','기타':'🛒','집에서 챙기기':'🏠'};
 const COLD={'정육':1,'수산':1,'냉장':1};
 const EMOJIS=['🍚','🍲','🍢','🥓','🍜','🍖','🍗','🥘','🍛','🍞','🥗','🍝','🌮','🍕','🍤','🥞','☕','🍉'];
 
