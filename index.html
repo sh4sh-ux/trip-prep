@@ -330,7 +330,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;
 
 <script>
 'use strict';
-const VERSION='v0.31', BUILD_TIME='2026-08-06 21:05';
+const VERSION='v0.32', BUILD_TIME='2026-08-06 21:40';
 const KEY='tripprep_v1';
 
 /* ================= 유틸 ================= */
@@ -1817,7 +1817,12 @@ function bundleItemForm(menuId,spec){
     </div>`);
   $('#bi-x').onclick=back;
   const setCat=c=>{sel=c;$('#bi-cat').querySelectorAll('.chip').forEach(x=>x.classList.toggle('on',x.dataset.c===c));};
-  $('#bi-cat').onclick=ev=>{const b=ev.target.closest('[data-c]');if(!b)return;catManual=true;setCat(b.dataset.c);};
+  $('#bi-cat').onclick=ev=>{const b=ev.target.closest('[data-c]');if(!b)return;
+    if(b.dataset.c===sel){          // 이미 선택된 분류를 다시 누르면 취소 → 자동 분류로 복귀
+      catManual=false;
+      const h=ingHint(nameInp.value.trim());
+      setCat(h?h.c:'');
+    }else{catManual=true;setCat(b.dataset.c);}};
   const nameInp=$('#bi-name');
   nameInp.oninput=()=>{if(catManual)return;const h=ingHint(nameInp.value.trim());if(h)setCat(h.c);};
   if(!editing)setTimeout(()=>nameInp.focus(),60);
