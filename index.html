@@ -330,7 +330,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;
 
 <script>
 'use strict';
-const VERSION='v0.33', BUILD_TIME='2026-08-06 22:20';
+const VERSION='v0.34', BUILD_TIME='2026-08-06 15:30';
 const KEY='tripprep_v1';
 
 /* ================= 유틸 ================= */
@@ -2392,7 +2392,9 @@ function importJSON(){
 /* ================= 이벤트 ================= */
 document.addEventListener('click',ev=>{
   const T=ev.target;
-  if(dragJustEnded){dragJustEnded=false;return;}   // 드래그 마무리 click 무시
+  // 드래그 직후 브라우저가 만드는 합성 click만 무시 (짧은 시간창). 영구 플래그면
+  // 합성 click이 안 생기는 경우 다음 실제 탭을 삼켜서 버튼이 안 눌리는 버그가 남음
+  if(dragEndedAt&&Date.now()-dragEndedAt<400){dragEndedAt=0;return;}
   if(T.closest('.drag-h'))return;                  // 핸들 클릭은 토글 아님
 
   if(T.closest('#btnNewTrip')){sheetTripForm(false);return;}
@@ -2525,7 +2527,7 @@ document.addEventListener('click',ev=>{
 });
 
 /* ---- 준비물 순서: ≡ 핸들을 누른 채 드래그 (카드가 손가락을 따라 움직임) ---- */
-let DRG=null, dragJustEnded=false;
+let DRG=null, dragEndedAt=0;
 document.addEventListener('pointerdown',e=>{
   const h=e.target.closest('.drag-h'); if(!h)return;
   const kind=h.dataset.kind;
@@ -2570,7 +2572,7 @@ function dragEnd(commit){
   const {kind,el,container,moved}=DRG;
   el.classList.remove('dragging'); el.style.transform='';
   DRG=null;
-  if(moved)dragJustEnded=true;   // 드래그 직후 발생하는 click이 헤더를 토글하지 않게
+  if(moved)dragEndedAt=Date.now();   // 드래그 직후 발생하는 합성 click이 헤더를 토글하지 않게
   const t=curTrip(); if(!t)return;
   if(!moved||!commit){render();return;}   // 이동 없거나 취소면 원상 복구
   const mkt=UI.tab==='market';
