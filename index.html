@@ -162,6 +162,13 @@ button.tap{text-align:left;background:transparent;border:none;padding:0;font:inh
 .mchip.on .cnt{color:rgba(255,255,255,.6);}
 .cnt{font-size:11px;color:var(--label3);font-weight:500;}
 .menu-off .txt{color:var(--label2);} .menu-off .tiny{color:var(--label3);}
+.menu-more{display:flex;align-items:center;gap:8px;width:100%;padding:11px 16px;text-align:left;position:relative;background:var(--fill2);}
+.menu-more::after{content:'';position:absolute;left:0;right:0;top:0;height:1px;background:var(--sep);}
+.mm-lab{font-size:12.5px;font-weight:600;color:var(--label2);}
+.mm-cnt{font-size:11px;font-weight:700;color:var(--label3);background:var(--fill);padding:1px 8px;border-radius:9px;font-variant-numeric:tabular-nums;}
+.menu-more .chev{margin-left:auto;}
+.menu-more.open .chev{transform:rotate(90deg);}
+.menu-more-body{background:var(--fill2);}
 .src{color:var(--green-txt);font-weight:500;}
 .flash{animation:flash .6s ease;}
 @keyframes flash{0%{background:#FFF6D9;}100%{background:transparent;}}
@@ -323,7 +330,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;
 
 <script>
 'use strict';
-const VERSION='v0.30', BUILD_TIME='2026-08-06 20:10';
+const VERSION='v0.31', BUILD_TIME='2026-08-06 21:05';
 const KEY='tripprep_v1';
 
 /* ================= 유틸 ================= */
@@ -639,7 +646,7 @@ function ingHint(n){
 
 /* ================= 데이터 ================= */
 // day:null → 첫 렌더에서 오늘 날짜에 해당하는 Day 로 자동 선택
-let DB=loadDB(), UI={tab:'today',day:null,seg:'menu',openCats:{},mktClosed:{}};
+let DB=loadDB(), UI={tab:'today',day:null,seg:'menu',openCats:{},mktClosed:{},menuMoreOpen:false};
 
 function loadDB(){
   try{const r=JSON.parse(localStorage.getItem(KEY));
@@ -1041,7 +1048,7 @@ function viewMarket(t){
   const nowMerged=new Set(items.filter(i=>i.from.length>1).map(i=>i.key));
 
   // 메뉴 = 행 리스트: 왼쪽 동그라미로 담기, 이름을 눌러 '필요한 것' 묶음 보기
-  const menuRowsHtml=menus.map(m=>{
+  const menuRow=m=>{
     const cold=(m.ing||[]).some(i=>COLD[i.c]);
     const prev=(m.ing||[]).map(i=>esc(i.n)).join(' · ')||'재료 없음';
     return `<div class="row ${m.picked?'':'menu-off'}">
@@ -1051,7 +1058,24 @@ function viewMarket(t){
         <div class="tiny">${prev}</div></button>
       ${cold?'<span class="pill-tag tag-cold">냉장</span>':''}
       ${CHEV}</div>`;
-  }).join('');
+  };
+  // A: 담은 메뉴를 위로 · B: 담은 게 있으면 안 담은 메뉴는 접어서 '더 보기'
+  const pickedMenus=menus.filter(m=>m.picked), restMenus=menus.filter(m=>!m.picked);
+  let menuListHtml;
+  if(!menus.length){
+    menuListHtml='<div class="empty">메뉴가 없습니다.</div>';
+  }else if(!pickedMenus.length){
+    // 아직 담은 게 없으면 전부 펼쳐 첫 선택을 돕는다
+    menuListHtml=restMenus.map(menuRow).join('');
+  }else{
+    const open=UI.menuMoreOpen;
+    const more=restMenus.length?`
+      <button class="menu-more ${open?'open':''}" id="menuMoreToggle">
+        <span class="mm-lab">${open?'담을 메뉴 접기':'담을 메뉴 더 보기'}</span>
+        <span class="mm-cnt">${restMenus.length}</span>${CHEV}</button>
+      ${open?`<div class="menu-more-body">${restMenus.map(menuRow).join('')}</div>`:''}`:'';
+    menuListHtml=pickedMenus.map(menuRow).join('')+more;
+  }
 
   const cats=MKT_CATS.filter(c=>items.some(i=>i.c===c));
   const allOpen=cats.every(c=>!UI.mktClosed[c]);
@@ -1098,8 +1122,8 @@ function viewMarket(t){
   </div>
   <div style="display:${UI.seg==='menu'?'block':'none'}">
     <div class="sec">
-      <div class="sec-hd"><div class="sec-title">메뉴</div><div class="sec-note">○ 담기 · 눌러서 필요한 것 보기</div></div>
-      ${menus.length?menuRowsHtml:'<div class="empty">메뉴가 없습니다.</div>'}
+      <div class="sec-hd"><div class="sec-title">메뉴</div><div class="sec-note">${pickedMenus.length?`담은 메뉴 ${pickedMenus.length}개`:'○ 담기 · 눌러서 필요한 것 보기'}</div></div>
+      ${menuListHtml}
       <button class="addbtn" id="btnAddMenu"><span class="plus">+</span> 메뉴 추가</button>
       ${DB.trips.some(x=>x.id!==t.id&&(x.menus||[]).length)?
         `<button class="addbtn" id="btnImportMenus" style="border-top:1px solid var(--sep)">
@@ -2396,6 +2420,8 @@ document.addEventListener('click',ev=>{
     if(p){p.done=!p.done;save();render();}
     return;
   }
+
+  if(T.closest('#menuMoreToggle')){UI.menuMoreOpen=!UI.menuMoreOpen;render();return;}
 
   const mn=T.closest('[data-menu]');
   if(mn){
