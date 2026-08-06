@@ -322,7 +322,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;
 
 <script>
 'use strict';
-const VERSION='v0.25', BUILD_TIME='2026-08-06 17:30';
+const VERSION='v0.26', BUILD_TIME='2026-08-06 18:10';
 const KEY='tripprep_v1';
 
 /* ================= 유틸 ================= */
@@ -448,6 +448,8 @@ const GEAR_MAP={
 };
 const recipeGear=name=>GEAR_MAP[name]?GEAR_MAP[name].slice():[];
 const gearNeedsGas=gear=>Array.isArray(gear)&&gear.includes('버너');
+// 소모품 — 사면 쓰고 없어지는 것 (도구도 순수 식재료도 아닌 것). 메뉴 묶음 보기에서 따로 그룹.
+const CONSUMABLES=new Set(['부탄가스','숯','식용유','올리브유']);
 
 // '집에서 챙기기' — 사는 게 아니라 집에서 가져가는 것 (고추장·참기름·김치 등)
 const MKT_CATS=['채소','정육','수산','냉장','소스·양념','기타','집에서 챙기기'];
@@ -1600,6 +1602,78 @@ function sheetMenuEdit(menuId){
   };
 }
 
+/* 메뉴 하나에 필요한 것 묶음 — 조리도구 / 소모품 / 재료를 한 화면에.
+   장보기(매대별 합산)와 반대 시선: "이 메뉴 한 상 차리려면 뭐가 필요한가" */
+function sheetMenuBundle(menuId){
+  const t=curTrip();
+  const draw=()=>{
+    const m=(t.menus||[]).find(x=>x.id===menuId);
+    if(!m){closeSheet();return;}
+    const sc=$('#sheet')?$('#sheet').scrollTop:0;
+    const bought=new Set(t.bought||[]);
+    // 담긴 메뉴들끼리 함께 쓰는 도구 → '공유' 표시 (준비물엔 하나만 챙기면 됨)
+    const share={};
+    (t.menus||[]).filter(x=>x.picked).forEach(x=>(x.gear||[]).forEach(g=>{share[g]=(share[g]||0)+1;}));
+    const gear=m.gear||[], ing=m.ing||[];
+    const consum=ing.filter(i=>CONSUMABLES.has(i.n)), food=ing.filter(i=>!CONSUMABLES.has(i.n));
+
+    const gearRow=name=>{
+      const pi=t.pack.find(p=>p.cat==='조리도구'&&p.name===name);
+      const done=pi?pi.done:false, shared=(share[name]||0)>1;
+      return `<div class="row ${done?'done':''}">
+        <button class="cb ${done?'on':''}" ${pi?`data-bgear="${esc(name)}"`:'disabled style="opacity:.4"'}>${CHECK}</button>
+        <div class="grow"><div class="txt">${esc(name)}</div>
+          ${shared?'<div class="tiny">공유 · 다른 메뉴와 함께 씀</div>':''}</div>
+      </div>`;
+    };
+    const ingRow=i=>{
+      const key=i.n+'|'+(i.u||''), on=bought.has(key);
+      const q=Number.isInteger(i.q)?i.q:Number(i.q.toFixed(2));
+      return `<div class="row ${on?'done':''}">
+        <button class="cb ${on?'on':''}" data-bbuy="${esc(key)}">${CHECK}</button>
+        <div class="grow"><div class="txt">${esc(i.n)}</div></div>
+        <div class="qty">${q}${esc(i.u||'')}</div>
+      </div>`;
+    };
+    const group=(icon,title,rows,count)=>rows?`
+      <div class="sec" style="margin:0 20px 10px;border:1px solid var(--sep)">
+        <div class="sec-hd"><div class="sec-title">${icon} ${title}</div>
+          <div class="sec-note">${count}</div></div>
+        ${rows}</div>`:'';
+
+    openSheet(`
+      <div class="sh-hd"><div class="sh-title">${esc(m.emoji||'🍽')} ${esc(m.name)}</div>
+        <div class="hd-right">
+          <button class="icon-btn" id="mb-edit" aria-label="메뉴 편집">${PENCIL}</button>
+          <button class="icon-btn" onclick="closeSheet()">${XICO}</button></div></div>
+      ${m.picked?'':`<div class="hint" style="margin:0 20px 12px">아직 장보기에 담지 않은 메뉴입니다.
+        담으면 도구는 준비물에, 재료는 장보기에 자동으로 들어갑니다.</div>`}
+      ${group('🍳','조리도구',gear.map(gearRow).join(''),gear.length)}
+      ${group('🧴','소모품',consum.map(ingRow).join(''),consum.length)}
+      ${group('🥬','재료',food.map(ingRow).join(''),food.length)}
+      ${(!gear.length&&!ing.length)?'<div class="empty">등록된 도구·재료가 없습니다.<br>연필로 편집해 채워보세요.</div>':''}
+      <div class="sh-body" style="padding-top:6px">
+        <button class="btn ${m.picked?'ghost':''}" id="mb-pick" ${m.picked?'style="color:var(--label)"':''}>
+          ${m.picked?'장보기에서 빼기':'＋ 이 메뉴 담기'}</button>
+      </div>`);
+    if($('#sheet'))$('#sheet').scrollTop=sc;
+
+    $('#mb-edit').onclick=()=>sheetMenuEdit(menuId);
+    $('#mb-pick').onclick=()=>{m.picked=!m.picked;save();render();draw();};
+    $('#sheet').querySelectorAll('[data-bgear]').forEach(b=>b.onclick=()=>{
+      const pi=t.pack.find(p=>p.cat==='조리도구'&&p.name===b.dataset.bgear);
+      if(pi){pi.done=!pi.done;save();render();draw();}
+    });
+    $('#sheet').querySelectorAll('[data-bbuy]').forEach(b=>b.onclick=()=>{
+      const k=b.dataset.bbuy; t.bought=t.bought||[];
+      const i=t.bought.indexOf(k);
+      if(i>=0)t.bought.splice(i,1); else t.bought.push(k);
+      save();render();draw();
+    });
+  };
+  draw();
+}
+
 // "당근, 2개, 채소" → {n:'당근',q:2,u:'개',c:'채소'}
 function parseIng(text){
   return String(text||'').split('\n').map(l=>l.trim()).filter(Boolean).map(line=>{
@@ -2181,7 +2255,7 @@ document.addEventListener('click',ev=>{
     return;
   }
   const om=T.closest('[data-openmenu]');
-  if(om){sheetMenuEdit(om.dataset.openmenu);return;}
+  if(om){sheetMenuBundle(om.dataset.openmenu);return;}
   if(T.closest('#btnAddMenu')){sheetMenuEdit(null);return;}
   if(T.closest('#btnImportMenus')){sheetImportMenus();return;}
   const imp=T.closest('[data-imp]');
@@ -2311,7 +2385,7 @@ document.addEventListener('pointerdown',ev=>{
   pressT=setTimeout(()=>{
     pressT=null; menuLongPressed=true;
     setTimeout(()=>{menuLongPressed=false;},700);   // click이 안 오는 경우(터치) 대비 자동 해제
-    sheetMenuEdit(c.dataset.menu);
+    sheetMenuBundle(c.dataset.menu);
   },520);
 });
 ['pointerup','pointercancel','pointermove'].forEach(e=>
