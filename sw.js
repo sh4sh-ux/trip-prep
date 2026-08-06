@@ -1,7 +1,7 @@
 /* 여행 준비 — 서비스워커
    HTML은 네트워크 우선(업데이트 즉시 반영), 나머지는 캐시 우선.
    앱을 배포할 때마다 CACHE 버전을 올릴 것. */
-const CACHE = 'trip-prep-v0.25';
+const CACHE = 'trip-prep-v0.26';
 const ASSETS = [
   './',
   './index.html',
