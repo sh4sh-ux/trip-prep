@@ -1,0 +1,38 @@
+name: Deploy to GitHub Pages
+
+# 레거시 "Deploy from a branch" 파이프라인이 막혀서(deployment_queued 좀비)
+# GitHub Actions 방식으로 전환. Settings → Pages → Source 를 "GitHub Actions" 로 둘 것.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:   # 수동 트리거(재배포)용
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 동시 배포 방지 + 진행 중이면 취소하고 최신으로
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+      - name: Upload artifact (사이트 루트 전체)
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.'
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
