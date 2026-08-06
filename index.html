@@ -93,16 +93,27 @@ button.tap{text-align:left;background:transparent;border:none;padding:0;font:inh
 .cal-d.on{background:var(--label);color:#fff;font-weight:700;}
 .cal-d.dis{color:#DCDCE0;} .cal-d.dis.sun,.cal-d.dis.sat{color:#DCDCE0;}
 .cal-d:not(.dis):not(.on):active{background:var(--fill);}
-.pk-sec{margin-top:18px;}
-.hr-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:5px;}
-.hr-b{height:38px;border:1px solid var(--sep);border-radius:8px;font-size:13.5px;
-  font-weight:500;color:var(--label2);background:var(--card);}
-.hr-b.on{background:var(--label);border-color:var(--label);color:#fff;font-weight:700;}
-.mn-row{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;}
-.mn-b{flex:1;min-width:56px;height:36px;border:1px solid var(--sep);border-radius:8px;
-  font-size:13px;font-weight:500;color:var(--label2);background:var(--card);}
-.mn-b.on{background:var(--label);border-color:var(--label);color:#fff;font-weight:700;}
-.pk-now{font-size:13px;font-weight:700;color:var(--blue);}
+.pk-sec{margin-top:16px;}
+.pk-now{font-size:13px;font-weight:700;color:var(--blue);font-variant-numeric:tabular-nums;}
+.time-in{display:flex;align-items:center;justify-content:center;gap:8px;margin:8px 0 6px;}
+.tin{width:66px;height:48px;text-align:center;font-size:21px;font-weight:700;border:1px solid var(--sep2);
+  border-radius:var(--rs);background:var(--bg);color:var(--label);outline:none;font-variant-numeric:tabular-nums;}
+.tin:focus{border-color:var(--blue);background:var(--card);}
+.tcolon{font-size:21px;font-weight:700;color:var(--label2);}
+.tundo{margin-left:6px;font-size:13px;font-weight:600;color:var(--label2);height:48px;padding:0 14px;
+  border:1px solid var(--sep2);border-radius:var(--rs);background:var(--card);}
+.tundo.on{background:var(--label);border-color:var(--label);color:#fff;}
+.wheels{position:relative;display:flex;justify-content:center;gap:20px;height:180px;overflow:hidden;
+  -webkit-mask-image:linear-gradient(180deg,transparent,#000 32%,#000 68%,transparent);
+          mask-image:linear-gradient(180deg,transparent,#000 32%,#000 68%,transparent);}
+.wheel{height:180px;overflow-y:scroll;scroll-snap-type:y mandatory;scrollbar-width:none;padding:70px 0;
+  -webkit-overflow-scrolling:touch;}
+.wheel::-webkit-scrollbar{display:none;}
+.wheel-i{height:40px;line-height:40px;scroll-snap-align:center;width:78px;text-align:center;
+  font-size:18px;font-weight:500;color:var(--label3);transition:color .1s,font-size .1s;}
+.wheel-i.sel{color:var(--label);font-weight:800;font-size:20px;}
+.wheel-band{position:absolute;left:50%;transform:translateX(-50%);width:180px;top:70px;height:40px;
+  border-top:1px solid var(--sep2);border-bottom:1px solid var(--sep2);pointer-events:none;}
 .txt{font-size:14px;line-height:1.35;word-break:break-word;}
 .tiny{font-size:11.5px;color:var(--label3);margin-top:2px;line-height:1.35;}
 .pill-tag{font-size:10.5px;font-weight:600;padding:2px 7px;border-radius:5px;flex-shrink:0;}
@@ -292,7 +303,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;
 
 <script>
 'use strict';
-const VERSION='v0.14', BUILD_TIME='2026-08-06 10:40';
+const VERSION='v0.15', BUILD_TIME='2026-08-06 11:20';
 const KEY='tripprep_v1';
 
 /* ================= 유틸 ================= */
@@ -1012,15 +1023,17 @@ function openPlaceSearch(onPick){
 }
 
 /* ---------- 날짜·시간 피커 (시트 위에 겹치는 두 번째 레이어) ---------- */
-const PK_MINUTES=['00','10','15','20','30','40','45','50'];
-let PK=null;   // {date,time,min,max,withTime,onDone,cur:{y,m}}
+let PK=null;   // {date,time,min,max,withTime,onDone,cur:{y,m},wheelH,wheelM}
+let pkProg=false;   // 휠 스크롤을 코드로 조정하는 동안 scroll 이벤트 무시
 
 function openPicker(o){
   const base=parseD(o.date)||new Date();
-  PK={date:o.date||'', time:o.time||'', min:o.min||'', max:o.max||'',
+  const t0=o.time||'';
+  PK={date:o.date||'', time:t0, min:o.min||'', max:o.max||'',
       withTime:!!o.withTime, timeOnly:!!o.timeOnly,
       title:o.title||'날짜 선택', onDone:o.onDone,
-      cur:{y:base.getFullYear(),m:base.getMonth()}};
+      cur:{y:base.getFullYear(),m:base.getMonth()},
+      wheelH:t0?+t0.slice(0,2):9, wheelM:t0?+t0.slice(3,5):0};
   renderPicker();
   $('#sheet2').classList.add('on'); $('#dim2').classList.add('on'); positionToast();
 }
@@ -1045,18 +1058,23 @@ function renderPicker(){
   const prevLast=`${y}-${pad(m)}-31`, nextFirst=`${m===11?y+1:y}-${pad(m===11?1:m+2)}-01`;
   const noPrev=PK.min&&prevLast<PK.min, noNext=PK.max&&nextFirst>PK.max;
 
-  const hh=PK.time?PK.time.slice(0,2):'', mm=PK.time?PK.time.slice(3,5):'';
+  const hasT=!!PK.time;
+  const wItems=(len,unit,sel)=>Array.from({length:len},(_,v)=>
+    `<div class="wheel-i ${v===sel?'sel':''}" data-v="${v}">${v}${unit}</div>`).join('');
   const timeHtml=PK.withTime?`
     <div class="pk-sec">
       <div class="prog-top"><div class="fld-lab" style="margin:0">시간</div>
-        <div class="pk-now">${PK.time||'시간 미정'}</div></div>
-      <div class="hr-grid">
-        ${Array.from({length:24},(_,h)=>
-          `<button class="hr-b ${hh===pad(h)?'on':''}" data-h="${pad(h)}">${h}시</button>`).join('')}
+        <div class="pk-now" id="pk-now">${PK.time||'시간 미정'}</div></div>
+      <div class="time-in">
+        <input class="tin" id="pk-hh" inputmode="numeric" maxlength="2" placeholder="--" value="${hasT?pad(PK.wheelH):''}">
+        <span class="tcolon">:</span>
+        <input class="tin" id="pk-mm" inputmode="numeric" maxlength="2" placeholder="--" value="${hasT?pad(PK.wheelM):''}">
+        <button class="tundo ${hasT?'':'on'}" id="pk-clear">미정</button>
       </div>
-      <div class="mn-row">
-        ${PK_MINUTES.map(v=>`<button class="mn-b ${mm===v?'on':''}" data-m="${v}">${v}분</button>`).join('')}
-        <button class="mn-b ${PK.time?'':'on'}" data-m="">미정</button>
+      <div class="wheels">
+        <div class="wheel" id="wheel-h" data-unit="h">${wItems(24,'시',PK.wheelH)}</div>
+        <div class="wheel" id="wheel-m" data-unit="m">${wItems(60,'분',PK.wheelM)}</div>
+        <div class="wheel-band"></div>
       </div>
     </div>`:'';
 
@@ -1092,14 +1110,40 @@ function renderPicker(){
       PK.date=b.dataset.d;renderPicker();};
   }
   if(PK.withTime){
-    $('#sheet2').querySelector('.hr-grid').onclick=ev=>{
-      const b=ev.target.closest('[data-h]');if(!b)return;
-      PK.time=b.dataset.h+':'+(PK.time?PK.time.slice(3,5):'00');renderPicker();};
-    $('#sheet2').querySelector('.mn-row').onclick=ev=>{
-      const b=ev.target.closest('[data-m]');if(!b)return;
-      if(b.dataset.m===''){PK.time='';}
-      else PK.time=(PK.time?PK.time.slice(0,2):'09')+':'+b.dataset.m;
-      renderPicker();};
+    const ITEM=40, wh=$('#wheel-h'), wm=$('#wheel-m');
+    const setSel=(el,idx)=>el.querySelectorAll('.wheel-i').forEach((it,i)=>it.classList.toggle('sel',i===idx));
+    const commit=()=>{
+      PK.time=pad(PK.wheelH)+':'+pad(PK.wheelM);
+      $('#pk-now').textContent=PK.time;
+      $('#pk-hh').value=pad(PK.wheelH); $('#pk-mm').value=pad(PK.wheelM);
+      $('#pk-clear').classList.remove('on');
+    };
+    // 초기 스크롤 위치 (코드 조정 중 scroll 이벤트 무시)
+    pkProg=true; wh.scrollTop=PK.wheelH*ITEM; wm.scrollTop=PK.wheelM*ITEM;
+    setTimeout(()=>{pkProg=false;},70);
+    const onScroll=(el,unit)=>{
+      if(pkProg)return;
+      clearTimeout(el._t);
+      el._t=setTimeout(()=>{
+        let idx=Math.round(el.scrollTop/ITEM);
+        idx=Math.max(0,Math.min(unit==='h'?23:59,idx));
+        setSel(el,idx);
+        if(unit==='h')PK.wheelH=idx; else PK.wheelM=idx;
+        commit();
+      },80);
+    };
+    wh.addEventListener('scroll',()=>onScroll(wh,'h'));
+    wm.addEventListener('scroll',()=>onScroll(wm,'m'));
+    const typeTo=(inp,el,max,setv)=>{
+      let v=parseInt(inp.value.replace(/\D/g,''),10);
+      if(isNaN(v))return; v=Math.max(0,Math.min(max,v)); setv(v);
+      pkProg=true; el.scrollTop=v*ITEM; setSel(el,v); setTimeout(()=>{pkProg=false;},70);
+      commit();
+    };
+    $('#pk-hh').addEventListener('input',()=>typeTo($('#pk-hh'),wh,23,v=>PK.wheelH=v));
+    $('#pk-mm').addEventListener('input',()=>typeTo($('#pk-mm'),wm,59,v=>PK.wheelM=v));
+    $('#pk-clear').onclick=()=>{PK.time='';$('#pk-now').textContent='시간 미정';
+      $('#pk-hh').value='';$('#pk-mm').value='';$('#pk-clear').classList.add('on');};
   }
   $('#pk-done').onclick=()=>{
     if(!PK.timeOnly&&!PK.date){toast('날짜를 선택해 주세요');return;}
