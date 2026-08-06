@@ -206,6 +206,10 @@ button.tap{text-align:left;background:transparent;border:none;padding:0;font:inh
 .dchip.on{background:var(--label);border-color:var(--label);color:#fff;font-weight:600;}
 .dchip small{display:block;font-size:10.5px;opacity:.65;font-weight:400;margin-top:1px;}
 
+.pack-tpl{margin-top:14px;text-align:center;}
+.pack-tpl button{font-size:13px;font-weight:600;color:var(--blue-txt);padding:9px 14px;border-radius:9px;background:var(--blue-bg);width:100%;}
+.pack-tpl button:active{opacity:.7;}
+.pack-tpl button.reset{margin-top:8px;color:var(--label2);background:var(--fill);font-weight:500;}
 .mkt-tools{display:flex;justify-content:flex-end;margin:-2px 2px 10px;}
 .mkt-tools button{font-size:12.5px;font-weight:600;color:var(--label2);padding:6px 11px;border-radius:8px;background:var(--fill);}
 .mkt-tools button:active{background:var(--sep);}
@@ -313,7 +317,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;
 
 <script>
 'use strict';
-const VERSION='v0.17', BUILD_TIME='2026-08-06 12:20';
+const VERSION='v0.18', BUILD_TIME='2026-08-06 13:00';
 const KEY='tripprep_v1';
 
 /* ================= 유틸 ================= */
@@ -638,13 +642,32 @@ const qtyStr=n=>n>1?'×'+n:'';
 function nightsOf(t){return Math.max(0,diffDays(t.dateStart,t.dateEnd));}
 function daysOf(t){return nightsOf(t)+1;}
 
+// 이름 → 수량 규칙 (내 기본 준비물에서도 상의 ×박수, 칫솔 ×인원수 유지용)
+const NAME_RULE={};
+PACK_TPL.forEach(g=>g.items.forEach(it=>{if(it.q)NAME_RULE[it.n]={q:it.q,s:it.s};}));
+
 function genPack(t){
-  const out=[],n=nightsOf(t),p=t.people||1;
+  const n=nightsOf(t),p=t.people||1;
+  // 내 기본 준비물이 저장돼 있으면 그걸 사용 (이름·분류 목록 + 알려진 수량 규칙 적용)
+  const tpl=DB.packTemplate;
+  if(Array.isArray(tpl)&&tpl.length){
+    return tpl.map(it=>{
+      const r=NAME_RULE[it.name];
+      return {id:uid(),cat:it.cat,name:it.name,qty:r?r.q(n,p):'',auto:r&&r.s?r.s(n,p):'',done:false};
+    });
+  }
+  const out=[];
   PACK_TPL.forEach(g=>g.items.forEach(it=>{
     if(it.only&&!it.only.includes(t.type))return;
     out.push({id:uid(),cat:g.cat,name:it.n,qty:it.q?it.q(n,p):'',auto:it.s?it.s(n,p):'',done:false});
   }));
   return out;
+}
+// 현재 여행의 준비물을 내 기본값으로 저장 (아이스박스·조리도구는 메뉴에서 자동 연동되므로 제외)
+function savePackTemplate(t){
+  DB.packTemplate=(t.pack||[])
+    .filter(pi=>pi.cat!=='아이스박스'&&pi.cat!=='조리도구')
+    .map(pi=>({cat:pi.cat,name:pi.name}));
 }
 
 function newTrip(f){
@@ -889,12 +912,18 @@ function viewPack(t){
     <div class="bar"><i class="${pct===100?'full':''}" style="width:${pct}%"></i></div>
   </div>
   <div class="banner g"><div class="bi">✨</div><div>
-    <div class="banner-t">${esc(typeName)} · ${nightsOf(t)}박${daysOf(t)}일 · ${t.people}명 기준</div>
-    <div class="banner-d">상의·속옷은 여행 길이, 칫솔·수건은 인원수에 맞춰 수량이 계산됐습니다. 필요 없는 항목은 지우면 됩니다.</div>
+    <div class="banner-t">${DB.packTemplate?'내 기본 준비물 사용 중':esc(typeName)+' · '+nightsOf(t)+'박'+daysOf(t)+'일 · '+t.people+'명 기준'}</div>
+    <div class="banner-d">${DB.packTemplate
+      ?'직접 저장한 기본 목록으로 만들어졌습니다. 상의·칫솔 등 수량은 이번 여행에 맞춰 계산됩니다.'
+      :'상의·속옷은 여행 길이, 칫솔·수건은 인원수에 맞춰 수량이 계산됐습니다. 필요 없는 항목은 지우면 됩니다.'}</div>
   </div></div>
   <div class="sec">${accs||'<div class="empty">항목이 없습니다.</div>'}</div>
   <button class="addbtn" data-addpack="기타" style="background:var(--card);border-radius:var(--r)">
-    <span class="plus">+</span> 새 항목 추가</button>`;
+    <span class="plus">+</span> 새 항목 추가</button>
+  <div class="pack-tpl">
+    <button id="btnSavePackTpl">📌 이 준비물을 다음 여행 기본값으로 저장</button>
+    ${DB.packTemplate?`<button id="btnResetPackTpl" class="reset">기본값을 앱 기본으로 되돌리기</button>`:''}
+  </div>`;
 }
 
 /* ---- 장보기 ---- */
@@ -1637,27 +1666,51 @@ function deleteBuyItem(key){
 function sheetPlan(id){
   const t=curTrip();
   const p=id?t.plans.find(x=>x.id===id):null;
+  const lastDay=daysOf(t)-1, hasSearch=t.type!=='overseas';
+  let mode='normal';
   let day=p?p.day:(UI.day||0), time=p?(p.time||''):'', end=p?(p.end||''):'';
+  // 숙박 모드 기본값: 첫날 15시 체크인 · 마지막날 11시 체크아웃
+  let ciDay=UI.day||0, ciTime='15:00', coDay=lastDay, coTime='11:00';
   const whenLabel=()=>`${fmtFull(addDays(t.dateStart,day))} · ${time||'시간 미정'}`;
+  const stayLabel=(d,tm)=>`${fmtFull(addDays(t.dateStart,d))} · ${tm||'시간 미정'}`;
   openSheet(`
     <div class="sh-hd"><div class="sh-title">${p?'일정 수정':'일정 추가'}</div>
       <button class="icon-btn" onclick="closeSheet()">${XICO}</button></div>
     <div class="sh-body">
-      <div class="fld"><div class="fld-lab">날짜 · 시작 시간</div>
-        <button class="inp fld-btn" id="p-when"><span id="p-when-t">${whenLabel()}</span>${CALICO}</button></div>
-      <div class="fld"><div class="fld-lab">종료 시간 (선택)</div>
-        <button class="inp fld-btn" id="p-end"><span id="p-end-t" class="${end?'':'ph'}">${end||'없음'}</span>${CLOCKICO}</button></div>
-      <div class="fld"><div class="fld-lab">일정 (선택)</div>
-        <input class="inp" id="p-title" placeholder="예: 마트 장보기" value="${esc(p?p.title:'')}"></div>
-      <div class="fld">
-        <div class="fld-lab">장소 · 메모 (선택)</div>
-        <div class="inp-wrap">
-          <input class="inp ${t.type!=='overseas'?'has-btn':''}" id="p-note" placeholder="예: 이마트 서귀포점" value="${esc(p?p.note:'')}">
-          ${t.type!=='overseas'?`<button class="inp-search" id="p-place">${PINICO} 검색</button>`:''}
-        </div></div>
+      ${p?'':`<div class="seg" id="p-mode">
+        <button class="on" data-mode="normal">일반 일정</button>
+        <button data-mode="stay">숙박 · 체크인/아웃</button></div>`}
+      <div id="p-normal">
+        <div class="fld"><div class="fld-lab">날짜 · 시작 시간</div>
+          <button class="inp fld-btn" id="p-when"><span id="p-when-t">${whenLabel()}</span>${CALICO}</button></div>
+        <div class="fld"><div class="fld-lab">종료 시간 (선택)</div>
+          <button class="inp fld-btn" id="p-end"><span id="p-end-t" class="${end?'':'ph'}">${end||'없음'}</span>${CLOCKICO}</button></div>
+        <div class="fld"><div class="fld-lab">일정 (선택)</div>
+          <input class="inp" id="p-title" placeholder="예: 마트 장보기" value="${esc(p?p.title:'')}"></div>
+        <div class="fld">
+          <div class="fld-lab">장소 · 메모 (선택)</div>
+          <div class="inp-wrap">
+            <input class="inp ${hasSearch?'has-btn':''}" id="p-note" placeholder="예: 이마트 서귀포점" value="${esc(p?p.note:'')}">
+            ${hasSearch?`<button class="inp-search" id="p-place">${PINICO} 검색</button>`:''}
+          </div></div>
+      </div>
+      <div id="p-staybox" style="display:none">
+        <div class="fld"><div class="fld-lab">체크인</div>
+          <button class="inp fld-btn" id="p-ci"><span id="p-ci-t">${stayLabel(ciDay,ciTime)}</span>${CALICO}</button></div>
+        <div class="fld"><div class="fld-lab">체크아웃</div>
+          <button class="inp fld-btn" id="p-co"><span id="p-co-t">${stayLabel(coDay,coTime)}</span>${CALICO}</button></div>
+        <div class="fld">
+          <div class="fld-lab">숙소 이름 (선택)</div>
+          <div class="inp-wrap">
+            <input class="inp ${hasSearch?'has-btn':''}" id="p-stayname" placeholder="예: 까사32 리조트">
+            ${hasSearch?`<button class="inp-search" id="p-stayplace">${PINICO} 검색</button>`:''}
+          </div></div>
+        <div class="hint">체크인·체크아웃 일정이 각 날짜에 하나씩 자동으로 추가됩니다.</div>
+      </div>
       <button class="btn" id="p-save">${p?'저장':'추가'}</button>
       ${p?`<button class="btn ghost" id="p-del">이 일정 삭제</button>`:''}
     </div>`);
+  // 일반 모드 피커
   $('#p-when').onclick=()=>openPicker({
     title:'날짜 · 시간', date:addDays(t.dateStart,day), time, withTime:true,
     min:t.dateStart, max:t.dateEnd,
@@ -1667,9 +1720,31 @@ function sheetPlan(id){
     title:'종료 시간', timeOnly:true, time:end||time, withTime:true,
     onDone:(d,tm)=>{end=tm;
       const el=$('#p-end-t'); el.textContent=end||'없음'; el.classList.toggle('ph',!end);}});
-  const plBtn=$('#p-place');
-  if(plBtn)plBtn.onclick=()=>openPlaceSearch(r=>{$('#p-note').value=r.name;});
+  if($('#p-place'))$('#p-place').onclick=()=>openPlaceSearch(r=>{$('#p-note').value=r.name;});
+  // 숙박 모드 피커
+  $('#p-ci').onclick=()=>openPicker({title:'체크인', date:addDays(t.dateStart,ciDay), time:ciTime,
+    withTime:true, min:t.dateStart, max:t.dateEnd,
+    onDone:(d,tm)=>{ciDay=Math.max(0,diffDays(t.dateStart,d));ciTime=tm;$('#p-ci-t').textContent=stayLabel(ciDay,ciTime);}});
+  $('#p-co').onclick=()=>openPicker({title:'체크아웃', date:addDays(t.dateStart,coDay), time:coTime,
+    withTime:true, min:t.dateStart, max:t.dateEnd,
+    onDone:(d,tm)=>{coDay=Math.max(0,diffDays(t.dateStart,d));coTime=tm;$('#p-co-t').textContent=stayLabel(coDay,coTime);}});
+  if($('#p-stayplace'))$('#p-stayplace').onclick=()=>openPlaceSearch(r=>{$('#p-stayname').value=r.name;});
+  // 모드 전환
+  const modeBox=$('#p-mode');
+  if(modeBox)modeBox.onclick=ev=>{const b=ev.target.closest('[data-mode]');if(!b)return;
+    mode=b.dataset.mode; modeBox.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));
+    $('#p-normal').style.display=mode==='normal'?'':'none';
+    $('#p-staybox').style.display=mode==='stay'?'':'none';};
   $('#p-save').onclick=()=>{
+    if(mode==='stay'){
+      if(coDay<ciDay||(coDay===ciDay&&ciTime&&coTime&&coTime<ciTime)){
+        toast('체크아웃이 체크인보다 빠릅니다');return;}
+      const nm=$('#p-stayname').value.trim();
+      t.plans.push({id:uid(),day:ciDay,time:ciTime,end:'',title:'체크인',note:nm});
+      t.plans.push({id:uid(),day:coDay,time:coTime,end:'',title:'체크아웃',note:nm});
+      UI.day=ciDay; save();closeSheet();render();toast('체크인·체크아웃을 추가했습니다');
+      return;
+    }
     const title=$('#p-title').value.trim();
     const note=$('#p-note').value.trim();
     if(!title&&!note){toast('일정이나 장소 중 하나는 입력해 주세요');return;}
@@ -1932,6 +2007,17 @@ document.addEventListener('click',ev=>{
     return;
   }
 
+  if(T.closest('#btnSavePackTpl')){
+    const t=curTrip(); savePackTemplate(t); save();
+    toast(`이 준비물(${DB.packTemplate.length}개)을 기본값으로 저장했습니다`);
+    return;
+  }
+  if(T.closest('#btnResetPackTpl')){
+    if(!confirm('내 기본 준비물을 지우고 앱 기본으로 되돌릴까요?\n(이미 만든 여행은 그대로입니다)'))return;
+    delete DB.packTemplate; save(); render();
+    toast('앱 기본 준비물로 되돌렸습니다');
+    return;
+  }
   const ap=T.closest('[data-addpack]');
   if(ap){sheetPack(ap.dataset.addpack,null);return;}
   const ep=T.closest('[data-editpack]');
