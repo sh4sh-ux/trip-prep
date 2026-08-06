@@ -322,7 +322,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;
 
 <script>
 'use strict';
-const VERSION='v0.26', BUILD_TIME='2026-08-06 18:10';
+const VERSION='v0.27', BUILD_TIME='2026-08-06 18:40';
 const KEY='tripprep_v1';
 
 /* ================= 유틸 ================= */
@@ -579,6 +579,19 @@ const RECIPES=[
 ['소시지야채볶음','🌭','소시지,0.5봉,냉장|파프리카,0.4개,채소|양파,0.4개,채소|케첩,=1통,소스·양념']
 ];
 
+/* 공용 양념 — 레시피에서 '='(고정 수량, 한 통이면 충분)로 표시된 재료 이름 모음.
+   여러 메뉴에 걸쳐도 합산하지 않고 최댓값(사실상 1통)만 필요.
+   단, 어느 레시피에선 인원 비례로 쓰이는 이름은 오탐 방지 위해 제외. */
+const STAPLES=(()=>{
+  const fixed=new Set(), scaled=new Set();
+  RECIPES.forEach(r=>String(r[2]).split('|').forEach(p=>{
+    const a=p.split(','), n=(a[0]||'').trim(), q=(a[1]||'').trim();
+    if(n)(q[0]==='='?fixed:scaled).add(n);
+  }));
+  scaled.forEach(n=>fixed.delete(n));
+  return fixed;
+})();
+
 // '=1통' → 고정 수량, '0.3kg' → 인원수 비례
 function parseRecipe(str){
   return str.split('|').map(p=>{
@@ -725,19 +738,17 @@ function syncGear(t){
 /* ---- 장보기 합산 ---- */
 function mergeMarket(t){
   const map=new Map();
-  (t.menus||[]).filter(m=>m.picked).forEach(m=>{
-    (m.ing||[]).forEach(i=>{
-      const key=i.n+'|'+(i.u||'');
-      if(!map.has(key))map.set(key,{key,n:i.n,u:i.u||'',c:i.c||'기타',q:0,from:[]});
-      const e=map.get(key); e.q+=Number(i.q)||0;
-      if(!e.from.includes(m.name))e.from.push(m.name);
-    });
-  });
-  (t.extras||[]).forEach(x=>{
-    const key=x.n+'|'+(x.u||'');
-    if(!map.has(key))map.set(key,{key,n:x.n,u:x.u||'',c:x.c||'기타',q:0,from:[],manual:true});
-    const e=map.get(key); e.q+=Number(x.q)||0; e.manual=true;
-  });
+  // 공용 양념(STAPLES)은 최댓값(1통이면 충분), 나머지는 합산
+  const add=(n,u,c,q,fromName,manual)=>{
+    const key=n+'|'+(u||'');
+    if(!map.has(key))map.set(key,{key,n,u:u||'',c:c||'기타',q:0,from:[],staple:STAPLES.has(n),manual:false});
+    const e=map.get(key), val=Number(q)||0;
+    e.q=e.staple?Math.max(e.q,val):e.q+val;
+    if(manual)e.manual=true;
+    if(fromName&&!e.from.includes(fromName))e.from.push(fromName);
+  };
+  (t.menus||[]).filter(m=>m.picked).forEach(m=>(m.ing||[]).forEach(i=>add(i.n,i.u,i.c,i.q,m.name,false)));
+  (t.extras||[]).forEach(x=>add(x.n,x.u,x.c,x.q,null,true));
   // 사용자가 직접 고친 값 덮어쓰기 · 뺀 항목 제외
   const ov=t.overrides||{}, ex=new Set(t.excluded||[]);
   return [...map.values()].filter(i=>!ex.has(i.key)).map(i=>{
@@ -1014,6 +1025,7 @@ function viewMarket(t){
   const allOpen=cats.every(c=>!UI.mktClosed[c]);
   const buildRow=(i,cat)=>{
     const on=bought.has(i.key), multi=i.from.length>1;
+    const shared=i.staple&&multi;   // 공용 양념이 여러 메뉴에 걸침 → 합산이 아니라 '공용'
     const isNew=multi&&!lastMerged.has(i.key);
     const q=Number.isInteger(i.q)?i.q:Number(i.q.toFixed(2));
     let srcTxt=i.manual&&!i.from.length?'직접 추가':i.from.join(' · ');
@@ -1022,7 +1034,7 @@ function viewMarket(t){
     return `<div class="row ${on?'done':''} ${isNew?'flash':''}">
       <button class="cb ${on?'on':''}" data-buy="${esc(i.key)}">${CHECK}</button>
       <button class="grow tap" data-editbuy="${esc(i.key)}"><div class="txt">${esc(i.n)}</div>
-        ${showSrc?`<div class="tiny ${multi?'src':''}">${multi?'합산 · ':''}${esc(srcTxt)}</div>`:''}</button>
+        ${showSrc?`<div class="tiny ${multi?'src':''}">${shared?'공용 · ':(multi?'합산 · ':'')}${esc(srcTxt)}</div>`:''}</button>
       ${COLD[cat]?'<span class="pill-tag tag-cold">콜드</span>':''}
       <div class="qty">${q}${esc(i.u)}</div>
       <button class="del-x" data-delbuy="${esc(i.key)}">${XICO}</button>
