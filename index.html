@@ -206,6 +206,9 @@ button.tap{text-align:left;background:transparent;border:none;padding:0;font:inh
 .dchip.on{background:var(--label);border-color:var(--label);color:#fff;font-weight:600;}
 .dchip small{display:block;font-size:10.5px;opacity:.65;font-weight:400;margin-top:1px;}
 
+.mkt-tools{display:flex;justify-content:flex-end;margin:-2px 2px 10px;}
+.mkt-tools button{font-size:12.5px;font-weight:600;color:var(--label2);padding:6px 11px;border-radius:8px;background:var(--fill);}
+.mkt-tools button:active{background:var(--sep);}
 .empty{padding:34px 20px;text-align:center;color:var(--label3);font-size:13px;line-height:1.7;}
 .pane{display:none;}
 .pane.on{display:block;}
@@ -303,7 +306,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;
 
 <script>
 'use strict';
-const VERSION='v0.15', BUILD_TIME='2026-08-06 11:20';
+const VERSION='v0.16', BUILD_TIME='2026-08-06 11:50';
 const KEY='tripprep_v1';
 
 /* ================= 유틸 ================= */
@@ -340,12 +343,12 @@ function toast(msg,actLabel,actFn){
 /* ================= 템플릿 ================= */
 const TYPES=[{k:'domestic',n:'국내'},{k:'overseas',n:'해외'},{k:'camp',n:'캠핑·차박'},{k:'biz',n:'출장'}];
 const PACK_CATS=[
-  {cat:'신분·필수',ic:'🪪'},{cat:'세면·욕실',ic:'🧴'},{cat:'의류 및 악세사리',ic:'👕'},
+  {cat:'신분·필수',ic:'🪪'},{cat:'세면도구 및 화장품',ic:'🧴'},{cat:'의류 및 악세사리',ic:'👕'},
   {cat:'수영용품',ic:'🏊'},{cat:'전자기기',ic:'🔌'},{cat:'건강·상비약',ic:'💊'},
   {cat:'아이스박스',ic:'🧊'},{cat:'조리도구',ic:'🍳'},{cat:'기타',ic:'🎒'}
 ];
 // 이전 버전에서 쓰던 카테고리 이름 → 현재 이름
-const CAT_RENAME={'옷':'의류 및 악세사리','충전·전자':'전자기기'};
+const CAT_RENAME={'옷':'의류 및 악세사리','충전·전자':'전자기기','세면·욕실':'세면도구 및 화장품'};
 const CAT_IC=Object.fromEntries(PACK_CATS.map(c=>[c.cat,c.ic]));
 
 // q(nights,people) → 수량 문자열 / s(nights,people) → 자동 계산 근거 / only: 해당 유형에서만
@@ -357,7 +360,7 @@ const PACK_TPL=[
     {n:'해외 유심 · 로밍',only:['overseas']},
     {n:'자동차키',only:['domestic','camp','biz']},
     {n:'숙소 예약 확인서'},{n:'렌터카 바우처',only:['domestic','overseas']}]},
-  {cat:'세면·욕실',items:[
+  {cat:'세면도구 및 화장품',items:[
     {n:'세안폼'},{n:'칫솔',q:(n,p)=>`×${p}`,s:BY_PEOPLE},{n:'치약'},{n:'샴푸 · 린스'},
     {n:'헤어밴드'},{n:'면도기'},{n:'수건',q:(n,p)=>`×${p}`,s:BY_PEOPLE},
     {n:'화장품 · 스킨케어'}]},
@@ -576,7 +579,7 @@ function scaleIng(ing,people){
 
 /* ================= 데이터 ================= */
 // day:null → 첫 렌더에서 오늘 날짜에 해당하는 Day 로 자동 선택
-let DB=loadDB(), UI={tab:'today',day:null,seg:'menu',openCats:{},editingMenu:null};
+let DB=loadDB(), UI={tab:'today',day:null,seg:'menu',openCats:{},mktClosed:{},editingMenu:null};
 
 function loadDB(){
   try{const r=JSON.parse(localStorage.getItem(KEY));
@@ -900,28 +903,39 @@ function viewMarket(t){
       <span class="e">${esc(m.emoji||'🍽')}</span>${esc(m.name)}
       <span class="cnt">${(m.ing||[]).length}</span></button>`).join('');
 
-  const listHtml=all?MKT_CATS.filter(c=>items.some(i=>i.c===c)).map(cat=>{
-    const rows=items.filter(i=>i.c===cat).map(i=>{
-      const on=bought.has(i.key), multi=i.from.length>1;
-      const isNew=multi&&!lastMerged.has(i.key);
-      const q=Number.isInteger(i.q)?i.q:Number(i.q.toFixed(2));
-      let srcTxt=i.manual&&!i.from.length?'직접 추가':i.from.join(' · ');
-      if(i.edited)srcTxt=(srcTxt?srcTxt+' · ':'')+'직접 수정함';
-      const showSrc=multi||(srcTxt&&srcTxt!==i.n);
-      return `<div class="row ${on?'done':''} ${isNew?'flash':''}">
-        <button class="cb ${on?'on':''}" data-buy="${esc(i.key)}">${CHECK}</button>
-        <button class="grow tap" data-editbuy="${esc(i.key)}"><div class="txt">${esc(i.n)}</div>
-          ${showSrc?`<div class="tiny ${multi?'src':''}">${multi?'합산 · ':''}${esc(srcTxt)}</div>`:''}</button>
-        ${COLD[cat]?'<span class="pill-tag tag-cold">콜드</span>':''}
-        <div class="qty">${q}${esc(i.u)}</div>
-        <button class="del-x" data-delbuy="${esc(i.key)}">${XICO}</button>
-      </div>`;
-    }).join('');
-    const cnt=items.filter(i=>i.c===cat).length;
-    return `<div class="sec"><div class="sec-hd">
-      <div class="sec-title">${MKT_IC[cat]} ${esc(cat)}</div><div class="sec-note">${cnt}개</div></div>
-      ${rows}</div>`;
-  }).join('')
+  const cats=MKT_CATS.filter(c=>items.some(i=>i.c===c));
+  const allOpen=cats.every(c=>!UI.mktClosed[c]);
+  const buildRow=(i,cat)=>{
+    const on=bought.has(i.key), multi=i.from.length>1;
+    const isNew=multi&&!lastMerged.has(i.key);
+    const q=Number.isInteger(i.q)?i.q:Number(i.q.toFixed(2));
+    let srcTxt=i.manual&&!i.from.length?'직접 추가':i.from.join(' · ');
+    if(i.edited)srcTxt=(srcTxt?srcTxt+' · ':'')+'직접 수정함';
+    const showSrc=multi||(srcTxt&&srcTxt!==i.n);
+    return `<div class="row ${on?'done':''} ${isNew?'flash':''}">
+      <button class="cb ${on?'on':''}" data-buy="${esc(i.key)}">${CHECK}</button>
+      <button class="grow tap" data-editbuy="${esc(i.key)}"><div class="txt">${esc(i.n)}</div>
+        ${showSrc?`<div class="tiny ${multi?'src':''}">${multi?'합산 · ':''}${esc(srcTxt)}</div>`:''}</button>
+      ${COLD[cat]?'<span class="pill-tag tag-cold">콜드</span>':''}
+      <div class="qty">${q}${esc(i.u)}</div>
+      <button class="del-x" data-delbuy="${esc(i.key)}">${XICO}</button>
+    </div>`;
+  };
+  const accs=cats.map(cat=>{
+    const catItems=items.filter(i=>i.c===cat);
+    const dn=catItems.filter(i=>bought.has(i.key)).length;
+    const open=!UI.mktClosed[cat];
+    return `<div class="acc ${open?'open':''}">
+      <button class="acc-hd" data-mktcat="${esc(cat)}">
+        <span class="acc-ic">${MKT_IC[cat]}</span>
+        <span class="acc-name">${esc(cat)}</span>
+        <span class="acc-count ${dn===catItems.length?'full':''}">${dn}/${catItems.length}</span>
+        ${CHEV}</button>
+      <div class="acc-body">${catItems.map(i=>buildRow(i,cat)).join('')}</div></div>`;
+  }).join('');
+  const listHtml=all?`
+    <div class="mkt-tools"><button id="mktToggleAll">${allOpen?'전체 접기':'전체 펼치기'}</button></div>
+    <div class="sec">${accs}</div>`
   :`<div class="sec"><div class="empty">고른 메뉴가 없습니다.<br>‘메뉴 고르기’에서 먼저 선택해 주세요.</div></div>`;
 
   lastMerged=nowMerged;
@@ -1853,6 +1867,15 @@ document.addEventListener('click',ev=>{
 
   const cat=T.closest('[data-cat]');
   if(cat){const c=cat.dataset.cat;UI.openCats[c]=!UI.openCats[c];render();return;}
+
+  const mcat=T.closest('[data-mktcat]');
+  if(mcat){const c=mcat.dataset.mktcat;UI.mktClosed[c]=!UI.mktClosed[c];render();return;}
+  if(T.closest('#mktToggleAll')){
+    const t=curTrip(), cats=MKT_CATS.filter(c=>mergeMarket(t).some(i=>i.c===c));
+    const anyOpen=cats.some(c=>!UI.mktClosed[c]);
+    cats.forEach(c=>{UI.mktClosed[c]=anyOpen;});   // 하나라도 열려 있으면 전부 접기, 아니면 전부 펼치기
+    render();return;
+  }
 
   const dp=T.closest('[data-delpack]');
   if(dp){
