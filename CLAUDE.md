@@ -20,11 +20,15 @@ mockup-travel.html    — 초기 디자인 목업 (참고용, 배포와 무관)
 sw.js                 — 서비스워커 (HTML 네트워크 우선 / 정적자원 캐시 우선)
 manifest.webmanifest  — PWA 매니페스트
 favicon.png / icons/  — 아이콘 (PIL로 생성, 파란 배경 흰 캐리어)
+.github/workflows/pages.yml — GitHub Pages 배포 워크플로 (Actions 방식)
 CLAUDE.md             — 이 파일
 ```
 
 ## 현재 버전
-**v0.34** (2026-08-06) — 순서 바꾸기 탭 삼킴 버그 수정: 드래그 종료 후 다음 클릭을 무조건 무시하던 영구 플래그(`dragJustEnded`)를 짧은 시간창 타임스탬프(`dragEndedAt`, 400ms)로 교체. 합성 click이 안 생기는 경우 '순서 편집 완료' 등 버튼이 간헐적으로 안 눌리던 문제 해결(준비물·장보기 공통)
+**v0.35** (2026-08-07) — 여행 유형에서 '출장'(biz) 제거("출장은 여행이 아니다"). `TYPES`에서 삭제 + biz 전용 준비물(`노트북·충전기`,`명함`) 정리 + 혼합 `only`(`자동차키`,`차량 거치대`)에서 biz 제거 + `migrate()`에 기존 type/packTemplateType 'biz'→'domestic' 마이그레이션
+
+### v0.34
+순서 바꾸기 탭 삼킴 버그 수정: 드래그 종료 후 다음 클릭을 무조건 무시하던 영구 플래그(`dragJustEnded`)를 짧은 시간창 타임스탬프(`dragEndedAt`, 400ms)로 교체. 합성 click이 안 생기는 경우 '순서 편집 완료' 등 버튼이 간헐적으로 안 눌리던 문제 해결(준비물·장보기 공통)
 
 ### v0.33
 장볼 것 순서 바꾸기: 매대(섹션)·항목 드래그 정렬. 매대 순서는 전역 `DB.mktOrder`, 항목 순서는 여행별 `t.buyOrder`(키 목록). 준비물 드래그 인프라(`data-sortcat`/`data-rowid`/`.drag-h`) 재사용, `UI.mktSort` 토글
@@ -75,8 +79,8 @@ DB = {
 - **준비물 수량 자동 계산** — 옷은 여행 길이, 칫솔·수건·수영복은 인원수 (`NAME_RULE`)
   자동 항목은 `auto` 필드에 근거 표시(`1박2일`, `6명`). 사용자가 수량을 직접 고치면 `auto=''`
   → 여행 인원·날짜 수정 시 `auto`가 남은 항목만 재계산 (직접 수정·체크 상태 보존)
-- **여행 유형(국내/해외/캠핑/출장)별 항목** — `only:[...]` / `NAME_ONLY`
-  해외→여권·변환어댑터, 국내→자동차키, 출장→수영용품 카테고리 제외
+- **여행 유형(국내/해외/캠핑)별 항목** — `only:[...]` / `NAME_ONLY`
+  해외→여권·변환어댑터, 국내·캠핑→자동차키·차량거치대 (출장 유형은 v0.35에서 폐지)
 - **내 기본 준비물** — 준비물 탭 하단 버튼으로 현재 목록을 `packTemplate`으로 저장
   이후 새 여행은 이 목록으로 생성. 유형이 다르면 유형 전용 항목 자동 보충/제외
   (저장 당시 유형 `packTemplateType`에 없던 항목만 보충 — 사용자가 지운 항목 부활 방지)
@@ -134,6 +138,10 @@ DB = {
 - 코드 변경마다 `VERSION`·`BUILD_TIME` 갱신 + **`sw.js`의 `CACHE` 버전도 같이 올릴 것**
 - 커밋은 변경된 파일만 명시적으로 추가 (`git add -A` 금지)
 - 브라우저 검증 시 테스트 데이터는 `localStorage.removeItem('tripprep_v1')`로 정리 후 커밋
+- **배포 방식(2026-08-07~): GitHub Actions 워크플로** (`.github/workflows/pages.yml`).
+  - Settings → Pages → Source = **`GitHub Actions`** (레거시 `Deploy from a branch`는 폐기 — 2026-08-06 GitHub 장애로 `deployment_queued` 좀비가 환경을 점유해 배포 불가에 빠졌음. `github-pages` 환경 삭제로 복구).
+  - **main에 push하면 자동 배포**. 수동 재배포는 워크플로 `workflow_dispatch`(Actions 탭 "Run workflow" 또는 API `run_workflow`).
+  - 배포가 `deployment_queued`/`waiting`로 멈추면: 좀비 배포가 `github-pages` **환경**을 점유한 것 → Settings → Environments → github-pages **삭제** 후 워크플로 재실행하면 환경이 새로 생성되며 배포됨.
 
 ## 작업 규칙
 - **실행 전 반드시 생각/계획을 먼저 말하고 확인 후 진행**
@@ -143,5 +151,5 @@ DB = {
 ## 대기 중 작업 (TODO) — 사용자와 나중에 다시 논의
 사용자가 "나중에 필요하면 얘기"한 보류 항목. 트립 준비 작업을 이어갈 때 먼저 꺼내 확인할 것.
 1. **아이콘 교체** — 사용자가 직접 캐리어+비행기 아이콘을 그려서 보내주기로 함. 받으면 4개 크기(favicon·icons/icon-192·icon-512·apple-touch-icon) 생성 + `manifest`/`sw.js` 캐시 반영해 배포. (내가 만든 시안은 "전투기 같다·캐리어 같지 않다"로 보류됨)
-2. **여행 유형에서 '출장'(biz) 제거** — "출장은 여행이 아니다"는 사용자 의견. `TYPES`에서 `{k:'biz'}` 삭제 + biz 전용 준비물(`노트북·충전기` only:['biz'], `명함` only:['biz']) 정리 + 혼합 `only` 배열(`자동차키`,`차량 거치대`)에서 'biz' 제거 + `migrate()`에 기존 type 'biz'→'domestic' 마이그레이션 추가.
+2. ~~여행 유형에서 '출장'(biz) 제거~~ — **v0.35에서 완료.**
 3. **해외 여행 장소 검색** — 현재 Daum 우편번호는 한국 전용이라 해외면 검색 버튼 숨김. 해외는 Photon(OSM 기반, 키 불필요, CORS, 자동완성) 같은 전 세계 지오코딩으로 분기하면 가능. 국내=Daum 유지, 해외=Photon 오버레이(입력창+실시간 후보). 온라인 필요, 실패 시 직접 입력 폴백.
