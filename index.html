@@ -330,7 +330,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;
 
 <script>
 'use strict';
-const VERSION='v0.36', BUILD_TIME='2026-08-07 03:55';
+const VERSION='v0.37', BUILD_TIME='2026-08-07 04:20';
 const KEY='tripprep_v1';
 
 /* ================= 유틸 ================= */
@@ -956,7 +956,7 @@ function quickCheckCard(t,day,D){
     </div>`;
   };
   if(day===0)cards.push(build('dep','🏠','출발 전 · 집 체크',DEP_CHECK));
-  if(day===D-1)cards.push(build('ret','🧳','떠나기 전 · 숙소 체크',RET_CHECK));
+  if(day===D-1)cards.push(build('ret',`<img src="${CARRIER_ICON}" alt="" style="height:17px;width:17px;object-fit:contain;vertical-align:-3px">`,'떠나기 전 · 숙소 체크',RET_CHECK));
   return cards.join('');
 }
 
